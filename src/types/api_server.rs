@@ -35,14 +35,12 @@ impl ApiServer {
 
             // build route services
             let public = collection.public();
-            let private = collection.private();
 
             // load services into app
             actix_web::App::new()
                 .app_data(app_state.clone())
                 .wrap(cors)
                 .service(public)
-                .service(private)
         };
 
         // start server

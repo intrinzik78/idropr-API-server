@@ -11,10 +11,10 @@ aes-gcm = "0.10.3"
 bcrypt = "0.17.0"
 chrono = "0.4.40"
 clap = { version = "4.5.43", features = ["derive"] }
+derive_more = { version = "1.0.0", features = ["from"] }
 dotenv = "0.15.0"
 serde = { version = "1.0.218", features = ["derive"] }
 sqlx = { version = "0.8.3", features = ["mysql", "runtime-async-std", "time","chrono","tls-rustls"] }
-derive_more = { version = "1.0.0", features = ["from"] }
 
 #codegen-units = 1
 #lto = false
