@@ -17,7 +17,8 @@ pub struct Env {
     db_host: String,            // ip address to host
     ip_address: String,         // server ip address
     master_password: String,    // for decrypting secret values on the database
-    server_mode: ServerMode     // [DEVELOPMENT,PRODUCTION,MAINTENANCE]
+    server_mode: ServerMode,    // [DEVELOPMENT,PRODUCTION,MAINTENANCE]
+    server_port: u16            // port server will accept requests on
 }
 
 impl Env {
@@ -57,6 +58,10 @@ impl Env {
         self.server_mode
     }
 
+    pub fn server_port(&self) -> u16 {
+        self.server_port
+    }
+
 }
 
 impl Default for Env {
@@ -74,7 +79,7 @@ impl Default for Env {
         let db_port: u16 = env.get("DB_PORT")
             .expect("DB_PORT not found in .env")
             .to_owned()
-            .parse::<u16>().expect("DB_PORT failed to parse in .env")
+            .parse::<u16>().expect("could not parse DB_PORT field in .env")
             .to_owned();
         let db_database = env.get("DB_DATABASE")
             .expect("DB_DATABASE not found in .env")
@@ -96,6 +101,11 @@ impl Default for Env {
             .to_owned()
             .to_server_mode()
             .expect("SERVER_MODE in .env out-of-range");
+        let server_port = env.get("SERVER_PORT")
+            .expect("SERVER_PORT not found in .env")
+            .to_owned()
+            .parse()
+            .expect("could not parse SERVER_PORT in .env");
 
         Env {
             db_cert_path,
@@ -106,7 +116,8 @@ impl Default for Env {
             db_host,
             ip_address,
             master_password,
-            server_mode
+            server_mode,
+            server_port
         }
     }
 }
@@ -117,7 +128,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn default_env_builder() {
-        // manually construct test with values == property names where possible
+        // manually construct Env, will fail on missing values
         let manual_env = Env {
             db_cert_path: String::from("db_cert_path"),
             db_user: String::from("db_user"),
@@ -127,6 +138,7 @@ mod tests {
             db_host: String::from("db_host"),
             ip_address: String::from("ip_address"),
             master_password: String::from("master_password"),
+            server_port: String::from("3000").parse().unwrap(),
             server_mode: ServerMode::Production
         };
 
@@ -139,23 +151,19 @@ mod tests {
         assert_eq!(manual_env.db_host(), String::from("db_host"));
         assert_eq!(manual_env.ip_address(), String::from("ip_address"));
         assert_eq!(manual_env.master_password(), &String::from("master_password"));
+        assert_eq!(manual_env.server_port(), 3000);
         assert_eq!(manual_env.server_mode(), ServerMode::Production);
 
-
         // test constructor generated properties contain some values
-        let builder = Env::default(); 
+        let builder = Env::default();
+        assert!(!builder.db_cert_path().is_empty());
+        assert!(!builder.db_user().is_empty());
+        assert!(!builder.db_database().is_empty());
+        assert!(!builder.db_password().is_empty());
+        assert!(!builder.db_host().is_empty());
+        assert!(!builder.ip_address().is_empty());
+        assert!(!builder.master_password().is_empty());
+        assert!(builder.server_port() > 0);
         
-        // will fail on missing values
-        let _test_builder = Env {
-            db_cert_path: builder.db_cert_path().to_owned(),
-            db_user: builder.db_user().to_owned(),
-            db_port: builder.db_port().to_owned(),
-            db_database: builder.db_database().to_owned(),
-            db_password: builder.db_password().to_owned(),
-            db_host: builder.db_host().to_owned(),
-            ip_address: builder.ip_address().to_owned(),
-            master_password: builder.master_password().to_owned(),
-            server_mode: ServerMode::Production
-        };
     }
 }

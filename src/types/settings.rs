@@ -29,6 +29,7 @@ pub struct Settings {
     pub master_password: MasterPassword,
     pub ip_address: String,
     pub server_mode: ServerMode,
+    pub server_port: u16,
     pub timestamp: DateTime<Utc>
 }
 
@@ -41,6 +42,7 @@ struct SettingsHelper {
     pub load_text_queue_service: i8,
     pub ip_address: String,
     pub server_mode: i8,
+    pub server_port: u16,
     pub timestamp: DateTime<Utc>
 }
 
@@ -55,6 +57,7 @@ impl SettingsHelper {
             master_password: MasterPassword::None,
             ip_address: self.ip_address.clone(),
             server_mode: self.server_mode.to_server_mode()?,
+            server_port: self.server_port,
             timestamp: self.timestamp,
         };
 
@@ -65,7 +68,7 @@ impl SettingsHelper {
 impl Settings {
     /// settings record by id
     pub async fn by_id(id: i64, database: &DatabaseConnection) -> Result<Settings> {
-        let sql = "SELECT load_email_queue_service, postmark_email_service, load_rate_limiter_service, load_text_queue_service, ip_address, server_mode, timestamp FROM `system_settings` WHERE system_settings.id = ?";
+        let sql = "SELECT load_email_queue_service, postmark_email_service, load_rate_limiter_service, load_text_queue_service, ip_address, server_mode, server_port, timestamp FROM `system_settings` WHERE system_settings.id = ?";
         let helper:Option<SettingsHelper> = sqlx::query_as(sql)
             .bind(id)
             .fetch_optional(&database.pool)
@@ -86,6 +89,7 @@ impl Default for Settings {
         let env = Env::default();
         let ip_address = env.ip_address().to_owned();
         let password = env.master_password().to_owned();
+        let server_port = 0_u16;
         let master_password = MasterPassword::Some(password);
 
         Settings {
@@ -96,6 +100,7 @@ impl Default for Settings {
             master_password,
             ip_address,
             server_mode: ServerMode::Maintenance,
+            server_port,
             timestamp: now
         }
     }        
@@ -117,6 +122,7 @@ mod tests {
             load_text_queue_service: 1,
             ip_address: String::from("ip_address"),
             server_mode: 1,
+            server_port: 1,
             timestamp: now
         };
 
@@ -127,6 +133,7 @@ mod tests {
         assert_eq!(transformed_data.load_rate_limiter_service, SystemFlag::Enabled);
         assert_eq!(transformed_data.load_text_queue_service, SystemFlag::Enabled);
         assert_eq!(transformed_data.ip_address, String::from("ip_address"));
+        assert_eq!(transformed_data.server_port, 1);
         assert_eq!(transformed_data.timestamp, now);
         
     }

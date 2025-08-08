@@ -13,16 +13,17 @@ use crate::{
     types::{
         AppState,
         HeaderSettings,
-        RouteScope
+        RouteCollection
     }
 };
 
 pub struct ApiServer;
 
 impl ApiServer {
-    pub async fn new(command: PrimaryCommand, arc_state: Data<AppState>) -> Result<()> {
+    pub async fn run(command: PrimaryCommand, arc_state: Data<AppState>, collection: RouteCollection) -> Result<()> {
         let app_state = arc_state.clone();
         let ip_address = app_state.settings().ip_address.clone();
+        let open_port = app_state.settings().server_port;
 
         // build app
         let app = move || {
@@ -33,18 +34,20 @@ impl ApiServer {
             };
 
             // build route services
-            let public_scope = RouteScope::public();
+            let public = collection.public();
+            let private = collection.private();
 
             // load services into app
             actix_web::App::new()
                 .app_data(app_state.clone())
                 .wrap(cors)
-                .service(public_scope)
+                .service(public)
+                .service(private)
         };
 
         // start server
         HttpServer::new(app)
-            .bind(ip_address)
+            .bind((ip_address,open_port))
             .expect("Failed to generate a running server.")
             .run()
             .await

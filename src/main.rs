@@ -8,6 +8,8 @@ pub mod types;
 // import packages
 use clap::Parser;
 
+use crate::types::RouteCollection;
+
 // internal types
 use {
     enums::{
@@ -37,9 +39,10 @@ async fn main() -> Result<()> {
     let arc_state = actix_web::web::Data::new(initial_state);
 
     // add chron jobs / services here ↴
+    let collection = RouteCollection;
 
     // build and run server ↴
-    let server = ApiServer::new(run_command, arc_state);
+    let server = ApiServer::run(run_command, arc_state, collection);
 
     server.await // win
 }

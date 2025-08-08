@@ -90,6 +90,7 @@ mod tests {
         let _constructor_test: AppState = AppState::new().await.unwrap();
 
         let env_vars = Env::default();
+        let server_port = env_vars.server_port();
         let database = DatabaseConnection::new(&env_vars).await.expect("failed to build database connection in app state test");
         let master_password = crate::enums::MasterPassword::None;
 
@@ -101,6 +102,7 @@ mod tests {
             master_password,
             ip_address: String::from("ip_address"),
             server_mode: ServerMode::Maintenance,
+            server_port,
             timestamp: chrono::Utc::now()
         };
 

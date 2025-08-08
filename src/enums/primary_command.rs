@@ -16,7 +16,7 @@ pub enum PrimaryCommand {
 
 impl PrimaryCommand {
     pub async fn dev_state() -> Result<AppState> {
-        println!("\nwarning: running in dev mode\n");
+        println!("\nwarning: server running in dev mode\n");
         let app_state = AppState::new()
             .await?;
 

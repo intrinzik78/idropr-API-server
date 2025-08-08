@@ -21,8 +21,8 @@ impl HeaderSettings {
     }
 
     pub fn filter_origin(header: &HeaderValue, request: &RequestHead) -> bool {
-        println!("header: {:?}", header);
-        println!("request header: {:?}", request);
+        println!("header: {header:?}");
+        println!("request header: {request:?}");
         true
     }
 
