@@ -89,7 +89,7 @@ impl Default for Settings {
         let env = Env::default();
         let ip_address = env.ip_address().to_owned();
         let password = env.master_password().to_owned();
-        let server_port = 0_u16;
+        let server_port = env.server_port();
         let master_password = MasterPassword::Some(password);
 
         Settings {

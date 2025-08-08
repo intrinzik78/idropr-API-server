@@ -1,3 +1,4 @@
+mod api_result;
 mod connection_status;
 mod error;
 mod permission;
@@ -7,6 +8,7 @@ mod rows_updated;
 mod server_mode;
 mod system_flag;
 
+pub use api_result::ApiResult;
 pub use connection_status::ConnectionStatus;
 pub use error::Error;
 pub use master_password::MasterPassword;

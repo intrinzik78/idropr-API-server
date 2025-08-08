@@ -1,3 +1,4 @@
+mod api_response;
 mod api_server;
 mod app_state;
 mod cli;
@@ -8,6 +9,7 @@ mod settings;
 mod software_access;
 mod route_collection;
 
+pub use api_response::ApiResponse;
 pub use api_server::ApiServer;
 pub use app_state::AppState;
 pub use cli::Cli;
