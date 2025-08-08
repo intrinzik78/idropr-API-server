@@ -14,7 +14,7 @@ type Result<T> = std::result::Result<T,Error>;
 
 const DATABASE_SETTINGS_ID:i64 = 1;
 
-#[derive(Debug)]
+#[derive(Clone,Debug)]
 pub struct AppState {
     database: DatabaseConnection,
     settings: Settings

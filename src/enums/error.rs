@@ -38,7 +38,7 @@ pub enum Error {
     DatabaseConnection(String),         // failed database connection with the message passed back by the database itself
     DatabaseConnectionTestFailed,       // generated during a test of a new database connection
     PemCertFileReadSizeMismatch,        // generated when the buffer size does not match the size returned from the file read
-    ServerCrash,
+    ServerCrash(String),                // generated if the HttpServer itself were to crash
     ServerModeOutOfRange,               // generated when the ToServerMode cannot match a database server mode value
     SystemSettingsNotSet,               // generated on startup when attempting to change a system while it's set to None
     SystemSettingsRecordNotReturned,    // a system settings record was not available in the database
@@ -57,6 +57,7 @@ impl Display for Error {
             Error::DatabaseConnection(e) => write!(f, "[database] Error connecting to database with message: {e}"),
             Error::DatabaseConnectionTestFailed => write!(f, "[database] Sqlx returned a valid connection, but a subsequent connection test failed."),
             Error::PemCertFileReadSizeMismatch => write!(f, "[file:io] Failed to read pem-certificate."),
+            Error::ServerCrash(server_error) => write!(f,"[http server error] {server_error}"),
             Error::SystemSettingsRecordNotReturned => write!(f, "[database] System settings not found in database."),
             Error::DevError(dev_message) => write!(f,"[dev message] {dev_message}"),
             _ => write!(f, "{self:?}")

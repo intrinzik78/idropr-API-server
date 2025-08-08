@@ -16,7 +16,7 @@ use crate::{
 
 type Result<T> = std::result::Result<T,Error>;
 
-#[derive(Debug)]
+#[derive(Clone,Debug)]
 pub struct DatabaseConnection {
     pub pool: MySqlPool
 }

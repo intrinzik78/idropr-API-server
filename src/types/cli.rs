@@ -4,7 +4,7 @@ use clap::Parser;
 
 use crate::enums::PrimaryCommand;
 
-#[derive(Debug,Parser)]
+#[derive(Clone,Debug,Parser)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: PrimaryCommand // single command, no args

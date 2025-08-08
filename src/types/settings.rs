@@ -20,7 +20,7 @@ use crate::{
 type Result<T> = std::result::Result<T,Error>;
 
 /// system settings container
-#[derive(Debug)]
+#[derive(Clone,Debug)]
 pub struct Settings {
     pub load_email_queue_service: SystemFlag,
     pub postmark_email_service: SystemFlag,
