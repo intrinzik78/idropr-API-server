@@ -1,0 +1,11 @@
+[package]
+name = "rate-limit"
+version = "0.0.1"
+edition = "2024"
+
+[lib]
+name="rate_limit"
+
+[dependencies]
+chrono = "0.4.40"
+derive_more = { version = "1.0.0", features = ["from"] }

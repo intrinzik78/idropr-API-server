@@ -1,10 +1,6 @@
 use std::{fs::File, io::Read};
 
-use sqlx::mysql::{
-    MySqlSslMode,
-    MySqlConnectOptions,
-    MySqlPool
-};
+use sqlx::mysql::{MySqlSslMode,MySqlConnectOptions,MySqlPool};
 
 use crate::{
     enums::{
@@ -105,6 +101,7 @@ pub mod test {
     #[actix_rt::test]
     async fn connection_status() {
         let env = Env::default();
+
         let database = DatabaseConnection::new(&env).await.expect("failed to connect to database");
         let connection_status = database.connection_status().await;
 

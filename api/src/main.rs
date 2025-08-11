@@ -7,7 +7,6 @@ pub mod types;
 
 // import packages
 use clap::Parser;
-
 use crate::types::RouteCollection;
 
 // internal types
@@ -18,7 +17,8 @@ use {
     },
     types::{
         ApiServer,
-        Cli
+        Cli,
+        Env
     }
 };
 
@@ -26,13 +26,16 @@ type Result<T> = std::result::Result<T,Error>;
 
 #[actix_rt::main]
 async fn main() -> Result<()> {
-    
+    // load env vars
+    let env = Env::default();
+
     // command line parser
     let run_command = Cli::parse().command;
 
+    // load base settings
     let initial_state = match run_command {
-        PrimaryCommand::Dev => PrimaryCommand::dev_state().await?,   // load local dev settings
-        PrimaryCommand::Prod => PrimaryCommand::prod_state().await?  // load production server settings
+        PrimaryCommand::Dev => PrimaryCommand::dev_state(&env).await?,   // load local dev settings
+        PrimaryCommand::Prod => PrimaryCommand::prod_state(&env).await?  // load production server settings
     };
 
     // move state into ARC ref

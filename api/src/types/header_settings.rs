@@ -1,11 +1,5 @@
 use actix_cors::Cors;
-use actix_web::{
-    dev::RequestHead,
-    http,
-    http::header::{
-        HeaderValue
-    }
-};
+use actix_web::{dev::RequestHead,http,http::header::{HeaderValue}};
 pub struct HeaderSettings;
 
 impl HeaderSettings {

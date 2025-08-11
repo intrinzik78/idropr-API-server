@@ -2,6 +2,7 @@ use crate::{
     enums::{
         ConnectionStatus,
         Error,
+        RateLimiterStatus,
     },
     types::{
         DatabaseConnection,
@@ -14,24 +15,22 @@ type Result<T> = std::result::Result<T,Error>;
 
 const DATABASE_SETTINGS_ID:i64 = 1;
 
-#[derive(Clone,Debug)]
+#[derive(Debug)]
 pub struct AppState {
     database: DatabaseConnection,
-    settings: Settings
+    settings: Settings,
+    limiter: RateLimiterStatus
 }
 
 impl AppState {
 
     /// constructor
-    pub async fn new() -> Result<AppState> {
-        // environmental vars
-        let env = Env::default();
-
+    pub async fn new(env: &Env) -> Result<AppState> {
         // system settings
         let settings = Settings::default();
 
         // connect database
-        let database = DatabaseConnection::new(&env).await?;
+        let database = DatabaseConnection::new(env).await?;
         
         // test connection status
         match database.connection_status().await {
@@ -42,7 +41,8 @@ impl AppState {
         // construct app state
         let app_state = AppState {
             database,
-            settings
+            settings,
+            limiter: RateLimiterStatus::Disabled
         };
 
         Ok(app_state)
@@ -69,6 +69,18 @@ impl AppState {
         &self.database
     }
 
+    /// rate limiter getter
+    pub fn rate_limiter(&self) -> &RateLimiterStatus {
+        &self.limiter
+    }
+
+    /// accepts an instance of RateLimiter and moves it into the server
+    pub fn with_rate_limit_status(mut self, status: RateLimiterStatus) -> Self {
+        self.limiter = status;
+
+        self
+    }
+
     /// settings getter
     pub fn settings(&self) -> &Settings {
         &self.settings
@@ -87,7 +99,8 @@ mod tests {
     #[actix_rt::test]
     async fn app_state_builder() {
         // constructor build test
-        let _constructor_test: AppState = AppState::new().await.unwrap();
+        let env = Env::default();
+        let _constructor_test: AppState = AppState::new(&env).await.unwrap();
 
         let env_vars = Env::default();
         let server_port = env_vars.server_port();
@@ -109,7 +122,8 @@ mod tests {
         // manual build test
         let _manual_builder = AppState {
             database,
-            settings
+            settings,
+            limiter: RateLimiterStatus::Disabled
         };
 
         // connection status is already checked in the AppState constructor()

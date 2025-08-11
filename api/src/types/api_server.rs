@@ -47,6 +47,7 @@ impl ApiServer {
         HttpServer::new(app)
             .bind((ip_address,open_port))
             .expect("Failed to generate a running server.")
+            .workers(2)
             .run()
             .await
             .map_err(|e| Error::ServerCrash(e.to_string()))

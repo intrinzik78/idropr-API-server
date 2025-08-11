@@ -3,14 +3,8 @@ use sqlx::{FromRow, MySql, Transaction};
 
 // internal libraries
 use crate::{
-    enums::{
-        Error,
-        Permission
-    },
-    traits::{
-        ToNumber,
-        ToPermission
-    },
+    enums::{Error,Permission},
+    traits::{ToNumber,ToPermission},
     types::DatabaseConnection
 };
 

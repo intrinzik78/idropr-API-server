@@ -1,21 +1,7 @@
-[package]
-name = "idropr-server"
-version = "0.0.1"
-edition = "2024"
+[workspace]
+members = [
+    "api",
+    "rate-limit"
+]
 
-[dependencies]
-actix-cors = "0.7.1"
-actix-rt = "2.10.0"
-actix-web = "4.9.0"
-aes-gcm = "0.10.3"
-bcrypt = "0.17.0"
-chrono = "0.4.40"
-clap = { version = "4.5.43", features = ["derive"] }
-derive_more = { version = "1.0.0", features = ["from"] }
-dotenv = "0.15.0"
-serde = { version = "1.0.218", features = ["derive"] }
-sqlx = { version = "0.8.3", features = ["mysql", "runtime-async-std", "time","chrono","tls-rustls"] }
-
-#codegen-units = 1
-#lto = false
-#RUSTFLAGS="-C target-cpu=native" cargo build --release
+resolver = "3"

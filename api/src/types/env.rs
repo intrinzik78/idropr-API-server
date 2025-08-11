@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 
 use dotenv;
 
@@ -8,17 +8,27 @@ use crate::{
 };
 
 // manages importing and testing of the .env file
+#[derive(Debug)]
 pub struct Env {
+    // database settings
     db_cert_path: String,       // path to local cert file
     db_user: String,            // username
     db_port: u16,               // default port is 3306
     db_database: String,        // schema / database name
     db_password: String,        // database access password
     db_host: String,            // ip address to host
+
+    // api server settings
     ip_address: String,         // server ip address
     master_password: String,    // for decrypting secret values on the database
     server_mode: ServerMode,    // [DEVELOPMENT,PRODUCTION,MAINTENANCE]
-    server_port: u16            // port server will accept requests on
+    server_port: u16,           // port server will accept requests on
+    server_threads: usize,      // maximum number of thread workers
+
+    // rate limiter settings
+    limiter_initial_capacity: usize,
+    limiter_tokens_per_client: i32,
+    limiter_monitoring_window_secs: u64
 }
 
 impl Env {
@@ -58,8 +68,24 @@ impl Env {
         self.server_mode
     }
 
+    pub fn server_threads(&self) -> usize {
+        self.server_threads
+    }
+
     pub fn server_port(&self) -> u16 {
         self.server_port
+    }
+
+    pub fn limiter_initial_capacity(&self) -> usize {
+        self.limiter_initial_capacity
+    }
+
+    pub fn limiter_tokens_per_client(&self) -> i32 {
+        self.limiter_tokens_per_client
+    }
+
+    pub fn limiter_monitoring_window_secs(&self) -> u64 {
+        self.limiter_monitoring_window_secs
     }
 
 }
@@ -73,39 +99,77 @@ impl Default for Env {
         let db_cert_path = env.get("DB_CERT_PATH")
             .expect("DB_CERT_PATH not found in .env")
             .to_owned();
+
         let db_user = env.get("DB_USER")
             .expect("DB_USER not found in .env")
             .to_owned();
+
         let db_port: u16 = env.get("DB_PORT")
             .expect("DB_PORT not found in .env")
             .to_owned()
-            .parse::<u16>().expect("could not parse DB_PORT field in .env")
-            .to_owned();
+            .parse()
+            .expect("could not parse DB_PORT field in .env");
+ 
         let db_database = env.get("DB_DATABASE")
             .expect("DB_DATABASE not found in .env")
             .to_owned();
+
         let db_password = env.get("DB_PASSWORD")
             .expect("DB_PASSWORD not found in .env")
             .to_owned();
+
         let db_host = env.get("DB_HOST")
             .expect("DB_HOST not found in .env")
             .to_owned();
+
         let ip_address = env.get("IP_ADDRESS")
             .expect("IP_ADDRESS not found in .env")
             .to_owned();
+
         let master_password = env.get("MASTER_PASSWORD")
             .expect("MASTER_PASSWORD not found in .env")
             .to_owned();
+        
         let server_mode = env.get("SERVER_MODE")
             .expect("SERVER_MODE not found in .env")
             .to_owned()
             .to_server_mode()
             .expect("SERVER_MODE in .env out-of-range");
+
         let server_port = env.get("SERVER_PORT")
             .expect("SERVER_PORT not found in .env")
             .to_owned()
             .parse()
             .expect("could not parse SERVER_PORT in .env");
+
+        let limiter_initial_capacity = env.get("LIMITER_INITIAL_CAPACITY")
+            .expect("LIMITER_INITIAL_CAPACITY not found in .env")
+            .to_owned()
+            .parse()
+            .expect("could not parse LIMITER_INITIAL_CAPACITY in .env");
+
+        let limiter_tokens_per_client = env.get("LIMITER_TOKENS_PER_CLIENT")
+            .expect("LIMITER_TOKENS_PER_CLIENT not found in .env")
+            .to_owned()
+            .parse()
+            .expect("could not parse LIMITER_TOKENS_PER_CLIENT in .env");
+
+
+        let limiter_monitoring_window_secs = env.get("LIMITER_MONITORING_WINDOW_SECS")
+            .expect("LIMITER_MONITORING_WINDOW_SECS not found in .env")
+            .to_owned()
+            .parse()
+            .expect("could not parse LIMITER_MONITORING_WINDOW_SECS in .env");
+
+        let server_threads: usize = env.get("SERVER_THREADS")
+            .expect("SERVER_THREADS not found in .env")
+            .parse()
+            .expect("could not parse SERVER_THREADS in .env");
+
+        // assert functional values
+        assert!(limiter_initial_capacity > 0);
+        assert!(limiter_monitoring_window_secs > 0);
+        assert!(limiter_tokens_per_client > 0);
 
         Env {
             db_cert_path,
@@ -117,7 +181,11 @@ impl Default for Env {
             ip_address,
             master_password,
             server_mode,
-            server_port
+            server_port,
+            limiter_initial_capacity,
+            limiter_tokens_per_client,
+            limiter_monitoring_window_secs,
+            server_threads
         }
     }
 }
@@ -139,7 +207,11 @@ mod tests {
             ip_address: String::from("ip_address"),
             master_password: String::from("master_password"),
             server_port: String::from("3000").parse().unwrap(),
-            server_mode: ServerMode::Production
+            server_mode: ServerMode::Production,
+            server_threads: 2,
+            limiter_initial_capacity: String::from("100").parse().unwrap(),
+            limiter_tokens_per_client: String::from("100").parse().unwrap(),
+            limiter_monitoring_window_secs: String::from("100").parse().unwrap(),
         };
 
         // test function calls return correct data
@@ -153,6 +225,10 @@ mod tests {
         assert_eq!(manual_env.master_password(), &String::from("master_password"));
         assert_eq!(manual_env.server_port(), 3000);
         assert_eq!(manual_env.server_mode(), ServerMode::Production);
+        assert_eq!(manual_env.limiter_initial_capacity(), 100);
+        assert_eq!(manual_env.limiter_tokens_per_client(), 100);
+        assert_eq!(manual_env.limiter_monitoring_window_secs(), 100);
+        assert_eq!(manual_env.server_threads(), 2);
 
         // test constructor generated properties contain some values
         let builder = Env::default();
@@ -164,6 +240,10 @@ mod tests {
         assert!(!builder.ip_address().is_empty());
         assert!(!builder.master_password().is_empty());
         assert!(builder.server_port() > 0);
+        assert!(builder.limiter_initial_capacity() > 0);
+        assert!(builder.limiter_tokens_per_client() > 0);
+        assert!(builder.limiter_monitoring_window_secs() > 0);
+        assert!(builder.server_threads() > 0);
         
     }
 }

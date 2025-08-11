@@ -42,7 +42,7 @@ pub enum Error {
     ServerModeOutOfRange,               // generated when the ToServerMode cannot match a database server mode value
     SystemSettingsNotSet,               // generated on startup when attempting to change a system while it's set to None
     SystemSettingsRecordNotReturned,    // a system settings record was not available in the database
-    SystemFlagOutOfRange,                // generated when the ToSystemFlag trait cannot match a database system flag value 
+    SystemFlagOutOfRange,               // generated when the ToSystemFlag trait cannot match a database system flag value 
 
     // disabled by default ↴
     DevError(String),
