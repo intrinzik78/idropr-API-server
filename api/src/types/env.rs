@@ -27,7 +27,7 @@ pub struct Env {
 
     // rate limiter settings
     limiter_initial_capacity: usize,
-    limiter_tokens_per_client: i32,
+    limiter_tokens_per_bucket: i32,
     limiter_monitoring_window_secs: u64
 }
 
@@ -80,8 +80,8 @@ impl Env {
         self.limiter_initial_capacity
     }
 
-    pub fn limiter_tokens_per_client(&self) -> i32 {
-        self.limiter_tokens_per_client
+    pub fn limiter_tokens_per_bucket(&self) -> i32 {
+        self.limiter_tokens_per_bucket
     }
 
     pub fn limiter_monitoring_window_secs(&self) -> u64 {
@@ -148,7 +148,7 @@ impl Default for Env {
             .parse()
             .expect("could not parse LIMITER_INITIAL_CAPACITY in .env");
 
-        let limiter_tokens_per_client = env.get("LIMITER_TOKENS_PER_CLIENT")
+        let limiter_tokens_per_bucket = env.get("LIMITER_TOKENS_PER_CLIENT")
             .expect("LIMITER_TOKENS_PER_CLIENT not found in .env")
             .to_owned()
             .parse()
@@ -169,7 +169,7 @@ impl Default for Env {
         // assert functional values
         assert!(limiter_initial_capacity > 0);
         assert!(limiter_monitoring_window_secs > 0);
-        assert!(limiter_tokens_per_client > 0);
+        assert!(limiter_tokens_per_bucket > 0);
 
         Env {
             db_cert_path,
@@ -183,7 +183,7 @@ impl Default for Env {
             server_mode,
             server_port,
             limiter_initial_capacity,
-            limiter_tokens_per_client,
+            limiter_tokens_per_bucket,
             limiter_monitoring_window_secs,
             server_threads
         }
@@ -210,7 +210,7 @@ mod tests {
             server_mode: ServerMode::Production,
             server_threads: 2,
             limiter_initial_capacity: String::from("100").parse().unwrap(),
-            limiter_tokens_per_client: String::from("100").parse().unwrap(),
+            limiter_tokens_per_bucket: String::from("100").parse().unwrap(),
             limiter_monitoring_window_secs: String::from("100").parse().unwrap(),
         };
 
@@ -226,7 +226,7 @@ mod tests {
         assert_eq!(manual_env.server_port(), 3000);
         assert_eq!(manual_env.server_mode(), ServerMode::Production);
         assert_eq!(manual_env.limiter_initial_capacity(), 100);
-        assert_eq!(manual_env.limiter_tokens_per_client(), 100);
+        assert_eq!(manual_env.limiter_tokens_per_bucket(), 100);
         assert_eq!(manual_env.limiter_monitoring_window_secs(), 100);
         assert_eq!(manual_env.server_threads(), 2);
 
@@ -241,7 +241,7 @@ mod tests {
         assert!(!builder.master_password().is_empty());
         assert!(builder.server_port() > 0);
         assert!(builder.limiter_initial_capacity() > 0);
-        assert!(builder.limiter_tokens_per_client() > 0);
+        assert!(builder.limiter_tokens_per_bucket() > 0);
         assert!(builder.limiter_monitoring_window_secs() > 0);
         assert!(builder.server_threads() > 0);
         
