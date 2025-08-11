@@ -27,7 +27,7 @@ impl PrimaryCommand {
         // initialize rate limiter
         let limiter = RateLimitBuilder::default()
             .with_initial_capacity(env.limiter_initial_capacity())
-            .with_tokens_per_client(env.limiter_tokens_per_client())
+            .with_tokens_per_bucket(env.limiter_tokens_per_bucket())
             .with_monitoring_window_secs(env.limiter_monitoring_window_secs())
             .shard_into(threads)
             .build();
@@ -58,7 +58,7 @@ impl PrimaryCommand {
                 
                 let limiter = RateLimitBuilder::default()
                     .with_initial_capacity(env.limiter_initial_capacity())
-                    .with_tokens_per_client(env.limiter_tokens_per_client())
+                    .with_tokens_per_bucket(env.limiter_tokens_per_bucket())
                     .with_monitoring_window_secs(env.limiter_monitoring_window_secs())
                     .shard_into(threads)
                     .build();

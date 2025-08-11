@@ -207,7 +207,7 @@ pub mod test {
             .with_initial_capacity(100)
             .with_monitoring_window_secs(60)
             .shard_into(2)
-            .with_tokens_per_client(10)
+            .with_tokens_per_bucket(10)
             .build();
 
         let ip_address = IpAddr::from_str("127.0.0.1").expect("test failed parsing &str to ip address");
@@ -228,7 +228,7 @@ pub mod test {
             .with_initial_capacity(100)
             .with_monitoring_window_secs(60)
             .shard_into(2)
-            .with_tokens_per_client(10)
+            .with_tokens_per_bucket(10)
             .build();
 
         // let ip_address = IpAddr::from_str("127.0.0.1").expect("test failed parsing &str to ip address");

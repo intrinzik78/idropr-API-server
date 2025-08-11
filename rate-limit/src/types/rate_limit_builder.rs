@@ -50,7 +50,7 @@ impl RateLimitBuilder {
     }
 
     /// set the default number of request tokens in each bucket
-    pub fn with_tokens_per_client(mut self, tokens: i32) -> Self {
+    pub fn with_tokens_per_bucket(mut self, tokens: i32) -> Self {
         self.tokens_per_bucket = tokens;
         self
     }

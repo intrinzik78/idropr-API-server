@@ -148,11 +148,11 @@ impl Default for Env {
             .parse()
             .expect("could not parse LIMITER_INITIAL_CAPACITY in .env");
 
-        let limiter_tokens_per_bucket = env.get("LIMITER_TOKENS_PER_CLIENT")
-            .expect("LIMITER_TOKENS_PER_CLIENT not found in .env")
+        let limiter_tokens_per_bucket = env.get("LIMITER_TOKENS_PER_BUCKET")
+            .expect("LIMITER_TOKENS_PER_BUCKET not found in .env")
             .to_owned()
             .parse()
-            .expect("could not parse LIMITER_TOKENS_PER_CLIENT in .env");
+            .expect("could not parse LIMITER_TOKENS_PER_BUCKET in .env");
 
 
         let limiter_monitoring_window_secs = env.get("LIMITER_MONITORING_WINDOW_SECS")
