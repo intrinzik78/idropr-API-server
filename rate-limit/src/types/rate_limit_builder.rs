@@ -1,23 +1,25 @@
 use std::{collections::HashMap, net::IpAddr};
 
-use crate::types::{RateLimiter,Timer,TokenBucket};
+use crate::{enums::RefillRate, types::{RateLimiter,Timer,TokenBucket}};
 
 #[derive(Clone,Debug)]
 pub struct RateLimitBuilder {
     pub map: HashMap<IpAddr,TokenBucket>,            /// collection of ip addresses and associated connection data
-    pub tokens_per_bucket: i32,
-    pub monitoring_window_secs: u64,
+    pub bucket_capacity: u32,
+    pub initial_tokens_per_bucket: u32,
+    pub refill_rate: RefillRate,
     pub blacklist: HashMap<IpAddr,Timer>,
     pub whitelist: HashMap<IpAddr,Timer>,
     pub threads: usize
 }
 
 impl RateLimitBuilder {
-    /// configures and returns a new RateLimiter
+    /// constructor
     pub fn new(
-        default_capacity: usize,
-        tokens_per_bucket: i32,
-        monitoring_window_secs: u64,
+        default_map_size: usize,
+        bucket_capacity: u32,
+        initial_tokens_per_bucket: u32,
+        refill_rate: RefillRate,
         threads: usize
     ) -> Self {
         // default settings
@@ -25,12 +27,13 @@ impl RateLimitBuilder {
         let blacklist: HashMap<IpAddr,Timer> = HashMap::new();
 
         // allocate and move into mutex
-        let map: HashMap<IpAddr, TokenBucket> = HashMap::with_capacity(default_capacity);
+        let map: HashMap<IpAddr, TokenBucket> = HashMap::with_capacity(default_map_size);
 
         RateLimitBuilder {
             map,
-            tokens_per_bucket,
-            monitoring_window_secs,
+            bucket_capacity,
+            initial_tokens_per_bucket,
+            refill_rate,
             blacklist,
             whitelist,
             threads
@@ -50,14 +53,20 @@ impl RateLimitBuilder {
     }
 
     /// set the default number of request tokens in each bucket
-    pub fn with_tokens_per_bucket(mut self, tokens: i32) -> Self {
-        self.tokens_per_bucket = tokens;
+    pub fn with_tokens_per_bucket(mut self, tokens: u32) -> Self {
+        self.initial_tokens_per_bucket = tokens;
+        self
+    }
+
+    /// set the default bucket capcity
+    pub fn with_bucket_capacity(mut self, tokens: u32) -> Self {
+        self.bucket_capacity = tokens;
         self
     }
     
     /// set the default monitoring window in seconds
-    pub fn with_monitoring_window_secs(mut self, seconds: u64) -> Self {
-        self.monitoring_window_secs = seconds;
+    pub fn with_refill_rate(mut self, rate: RefillRate) -> Self {
+        self.refill_rate = rate;
         self
     }
 
@@ -75,11 +84,36 @@ impl RateLimitBuilder {
 
 impl Default for RateLimitBuilder {
     fn default() -> Self {
-        let default_capacity:usize = 10;
-        let tokens_per_bucket = 60;
-        let monitoring_window_secs = 60;
-        let threads = 1;
+        // base settings
+        let default_map_size:usize = 100;
+        let bucket_capacity = 50;
+        let initial_tokens_per_bucket = 10;
+        let base_refill_rate = RefillRate::PerMinute(50.0);
+        let threads = 2;
 
-        Self::new(default_capacity,tokens_per_bucket,monitoring_window_secs,threads)
+        Self::new(
+            default_map_size,
+            bucket_capacity,
+            initial_tokens_per_bucket,
+            base_refill_rate,
+            threads
+        )
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use crate::RateLimitBuilder;
+
+    /// tests the default builder and associated builder functions
+    #[test]
+    fn builder() {
+        let _default = RateLimitBuilder::default()
+            .with_initial_capacity(1000)
+            .with_tokens_per_bucket(100)
+            .with_bucket_capacity(200)
+            .with_refill_rate(crate::enums::RefillRate::PerMinute(60.0))
+            .shard_into(4)
+            .build();
     }
 }

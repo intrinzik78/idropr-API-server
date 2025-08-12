@@ -1,6 +1,6 @@
 use std::time::{Duration,Instant};
 
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug,PartialEq)]
 pub struct Timer {
     expires: Box<Option<Instant>>
 }

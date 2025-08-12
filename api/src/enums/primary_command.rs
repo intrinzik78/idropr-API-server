@@ -1,6 +1,9 @@
 /// simple command line arguments to load the correct environment vars
 use clap::Subcommand;
-use rate_limit::RateLimitBuilder;
+use rate_limit::{
+    enums::{TimeWindow,RefillRate},
+    types::RateLimitBuilder
+};
 
 use crate::{
     enums::{Error, RateLimiterStatus, SystemFlag},
@@ -17,18 +20,29 @@ pub enum PrimaryCommand {
 
 impl PrimaryCommand {
 
+    fn build_refill_rate(rate: f32, window: TimeWindow) -> RefillRate {
+        match window {
+            TimeWindow::Day => RefillRate::PerDay(rate),
+            TimeWindow::Hour => RefillRate::PerHour(rate),
+            TimeWindow::Minute => RefillRate::PerMinute(rate),
+            TimeWindow::Second => RefillRate::PerSecond(rate)
+        }
+    }
+
     /// loads settings for local developement
     pub async fn dev_state(env: &Env) -> Result<AppState> {
 
         println!("\nwarning: server running in dev mode\n");
         
         let threads = env.server_threads();
-
         // initialize rate limiter
+        let rate = env.limiter_refill_rate();
+        let window = env.limiter_refill_window();
+        let refill_rate = PrimaryCommand::build_refill_rate(rate, window);
         let limiter = RateLimitBuilder::default()
             .with_initial_capacity(env.limiter_initial_capacity())
             .with_tokens_per_bucket(env.limiter_tokens_per_bucket())
-            .with_monitoring_window_secs(env.limiter_monitoring_window_secs())
+            .with_refill_rate(refill_rate)
             .shard_into(threads)
             .build();
 
@@ -55,11 +69,15 @@ impl PrimaryCommand {
         let app_state = match app_state.settings().load_rate_limiter_service {
             SystemFlag::Enabled => {
                 let threads = env.server_threads();
-                
+
+                // initialize rate limiter
+                let rate = env.limiter_refill_rate();
+                let window = env.limiter_refill_window();
+                let refill_rate = PrimaryCommand::build_refill_rate(rate, window);
                 let limiter = RateLimitBuilder::default()
                     .with_initial_capacity(env.limiter_initial_capacity())
                     .with_tokens_per_bucket(env.limiter_tokens_per_bucket())
-                    .with_monitoring_window_secs(env.limiter_monitoring_window_secs())
+                    .with_refill_rate(refill_rate)
                     .shard_into(threads)
                     .build();
                 

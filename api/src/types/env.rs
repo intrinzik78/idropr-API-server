@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Debug};
 
 use dotenv;
-
+use rate_limit::{enums::TimeWindow,traits::ToTimeWindow};
 use crate::{
     enums::ServerMode,
     traits::ToServerMode
@@ -27,8 +27,10 @@ pub struct Env {
 
     // rate limiter settings
     limiter_initial_capacity: usize,
-    limiter_tokens_per_bucket: i32,
-    limiter_monitoring_window_secs: u64
+    limiter_tokens_per_bucket: u32,
+    limiter_initial_tokens_per_bucket: u32,
+    limiter_refill_rate: f32,
+    limiter_refill_window: TimeWindow
 }
 
 impl Env {
@@ -80,12 +82,21 @@ impl Env {
         self.limiter_initial_capacity
     }
 
-    pub fn limiter_tokens_per_bucket(&self) -> i32 {
+    pub fn limiter_initial_tokens_per_bucket(&self) -> u32 {
+        self.limiter_initial_tokens_per_bucket
+    }
+
+    pub fn limiter_tokens_per_bucket(&self) -> u32 {
         self.limiter_tokens_per_bucket
     }
 
-    pub fn limiter_monitoring_window_secs(&self) -> u64 {
-        self.limiter_monitoring_window_secs
+    pub fn limiter_refill_rate(&self) -> f32 {
+        self.limiter_refill_rate
+    }
+
+
+    pub fn limiter_refill_window(&self) -> TimeWindow {
+        self.limiter_refill_window
     }
 
 }
@@ -154,22 +165,25 @@ impl Default for Env {
             .parse()
             .expect("could not parse LIMITER_TOKENS_PER_BUCKET in .env");
 
-
-        let limiter_monitoring_window_secs = env.get("LIMITER_MONITORING_WINDOW_SECS")
-            .expect("LIMITER_MONITORING_WINDOW_SECS not found in .env")
-            .to_owned()
-            .parse()
-            .expect("could not parse LIMITER_MONITORING_WINDOW_SECS in .env");
-
         let server_threads: usize = env.get("SERVER_THREADS")
             .expect("SERVER_THREADS not found in .env")
             .parse()
             .expect("could not parse SERVER_THREADS in .env");
 
-        // assert functional values
-        assert!(limiter_initial_capacity > 0);
-        assert!(limiter_monitoring_window_secs > 0);
-        assert!(limiter_tokens_per_bucket > 0);
+        let limiter_refill_rate: f32 = env.get("LIMITER_REFILL_RATE")
+            .expect("LIMITER_REFILL_RATE not found in .env")
+            .parse()
+            .expect("could not parse LIMITER_REFILL_RATE in .env");
+
+        let limiter_refill_window: TimeWindow = env.get("LIMITER_REFILL_WINDOW")
+            .expect("LIMITER_REFILL_WINDOW not found in .env")
+            .to_time_window()
+            .expect("LIMITER_REFILL_WINDOW out of bounds in .env");
+
+        let limiter_initial_tokens_per_bucket: u32 = env.get("LIMITER_INITIAL_TOKENS_PER_BUCKET")
+            .expect("LIMITER_INITIAL_TOKENS_PER_BUCKET not found in .env")
+            .parse()
+            .expect("could not parse LIMITER_INITIAL_TOKENS_PER_BUCKET in .env");
 
         Env {
             db_cert_path,
@@ -183,8 +197,10 @@ impl Default for Env {
             server_mode,
             server_port,
             limiter_initial_capacity,
+            limiter_initial_tokens_per_bucket,
+            limiter_refill_rate,
+            limiter_refill_window,
             limiter_tokens_per_bucket,
-            limiter_monitoring_window_secs,
             server_threads
         }
     }
@@ -192,6 +208,8 @@ impl Default for Env {
 
 #[cfg(test)]
 mod tests {
+    use rate_limit::traits::ToTimeWindow;
+
     use super::*;
 
     #[actix_rt::test]
@@ -210,8 +228,10 @@ mod tests {
             server_mode: ServerMode::Production,
             server_threads: 2,
             limiter_initial_capacity: String::from("100").parse().unwrap(),
+            limiter_initial_tokens_per_bucket: 1000,
             limiter_tokens_per_bucket: String::from("100").parse().unwrap(),
-            limiter_monitoring_window_secs: String::from("100").parse().unwrap(),
+            limiter_refill_rate: String::from("100").parse().unwrap(),
+            limiter_refill_window: String::from("HOUR").to_time_window().unwrap()
         };
 
         // test function calls return correct data
@@ -226,8 +246,9 @@ mod tests {
         assert_eq!(manual_env.server_port(), 3000);
         assert_eq!(manual_env.server_mode(), ServerMode::Production);
         assert_eq!(manual_env.limiter_initial_capacity(), 100);
+        assert_eq!(manual_env.limiter_initial_tokens_per_bucket(), 1000);
         assert_eq!(manual_env.limiter_tokens_per_bucket(), 100);
-        assert_eq!(manual_env.limiter_monitoring_window_secs(), 100);
+        assert_eq!(manual_env.limiter_refill_window(),TimeWindow::Hour);
         assert_eq!(manual_env.server_threads(), 2);
 
         // test constructor generated properties contain some values
@@ -241,9 +262,18 @@ mod tests {
         assert!(!builder.master_password().is_empty());
         assert!(builder.server_port() > 0);
         assert!(builder.limiter_initial_capacity() > 0);
+        assert!(builder.limiter_initial_tokens_per_bucket() > 0);
         assert!(builder.limiter_tokens_per_bucket() > 0);
-        assert!(builder.limiter_monitoring_window_secs() > 0);
         assert!(builder.server_threads() > 0);
+
+        let time_window = match builder.limiter_refill_window() {
+            TimeWindow::Day => true,
+            TimeWindow::Hour => true,
+            TimeWindow::Minute => true,
+            TimeWindow::Second => true,
+        };
+
+        assert!(time_window);
         
     }
 }

@@ -14,6 +14,7 @@ pub enum RateLimitError {
     PoisonedBlacklist,
     PoisonedRateLimiterMap,
     PoisonedWhitelistlist,
+    TimeWindowOutOfBounds
 
     // disabled by default ↴
     // DevError(String),
@@ -30,6 +31,7 @@ impl Display for RateLimitError {
             RateLimitError::PoisonedBlacklist => write!(f, "[rate limit] rate limiter black list poisoned"),
             RateLimitError::PoisonedRateLimiterMap => write!(f, "[rate limit] rate limiter map poisoned"),
             RateLimitError::PoisonedWhitelistlist => write!(f, "[rate limit] rate limiter white list poisoned"),
+            RateLimitError::TimeWindowOutOfBounds => write!(f, "[rate limit] time window setting out of bounds"),
             // RateLimitError::DevError(dev_message) => write!(f,"[dev message] {dev_message}"),
             _ => write!(f, "[rate limit error]")
         }
