@@ -3,11 +3,10 @@ use crate::{
         ConnectionStatus,
         Error,
         RateLimiterStatus,
+        SessionControllerStatus
     },
     types::{
-        DatabaseConnection,
-        Env,
-        Settings
+        DatabaseConnection, Env, Settings
     }
 };
 
@@ -19,7 +18,8 @@ const DATABASE_SETTINGS_ID:i64 = 1;
 pub struct AppState {
     database: DatabaseConnection,
     settings: Settings,
-    limiter: RateLimiterStatus
+    limiter: RateLimiterStatus,
+    sessions: SessionControllerStatus,
 }
 
 impl AppState {
@@ -42,7 +42,8 @@ impl AppState {
         let app_state = AppState {
             database,
             settings,
-            limiter: RateLimiterStatus::Disabled
+            limiter: RateLimiterStatus::Disabled,
+            sessions: SessionControllerStatus::Disabled
         };
 
         Ok(app_state)
@@ -74,10 +75,21 @@ impl AppState {
         &self.limiter
     }
 
+    /// session controller getter
+    pub fn sessions(&self) -> &SessionControllerStatus {
+        &self.sessions
+    }
+
     /// accepts an instance of RateLimiter and moves it into the server
     pub fn with_rate_limit_status(mut self, status: RateLimiterStatus) -> Self {
         self.limiter = status;
 
+        self
+    }
+
+    // accepts an instance of the SessionController and moves it into the server
+    pub fn with_session_status(mut self, status: SessionControllerStatus) -> Self {
+        self.sessions = status;
         self
     }
 
@@ -103,7 +115,7 @@ mod tests {
         let _constructor_test: AppState = AppState::new(&env).await.unwrap();
 
         let env_vars = Env::default();
-        let server_port = env_vars.server_port();
+        let server_port = env_vars.server_port;
         let database = DatabaseConnection::new(&env_vars).await.expect("failed to build database connection in app state test");
         let master_password = crate::enums::MasterPassword::None;
 
@@ -123,7 +135,8 @@ mod tests {
         let _manual_builder = AppState {
             database,
             settings,
-            limiter: RateLimiterStatus::Disabled
+            limiter: RateLimiterStatus::Disabled,
+            sessions: SessionControllerStatus::Disabled
         };
 
         // connection status is already checked in the AppState constructor()

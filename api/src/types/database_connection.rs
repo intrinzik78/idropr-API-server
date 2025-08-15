@@ -43,12 +43,12 @@ impl DatabaseConnection {
     /// builder function
     pub async fn new(env: &Env) -> Result<DatabaseConnection> {
         // load env variables
-        let db_user = env.db_user();
-        let db_port = env.db_port();
-        let db_database = env.db_database();
-        let db_host = env.db_host();
-        let db_password = env.db_password();
-        let db_cert_path = env.db_cert_path();
+        let db_user = &env.db_user;
+        let db_port = env.db_port;
+        let db_database = &env.db_database;
+        let db_host = &env.db_host;
+        let db_password = &env.db_password;
+        let db_cert_path = &env.db_cert_path;
         let pem_certificate = DatabaseConnection::pem_cert(db_cert_path).await?;
 
         // connection options

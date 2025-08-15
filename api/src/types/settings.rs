@@ -87,9 +87,9 @@ impl Default for Settings {
     fn default() -> Self {
         let now = Utc::now();
         let env = Env::default();
-        let ip_address = env.ip_address().to_owned();
-        let password = env.master_password().to_owned();
-        let server_port = env.server_port();
+        let ip_address = env.ip_address;
+        let password = env.master_password;
+        let server_port = env.server_port;
         let master_password = MasterPassword::Some(password);
 
         Settings {

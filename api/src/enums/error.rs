@@ -15,6 +15,10 @@ pub enum Error {
     #[from]
     Actix(actix_web::Error),
 
+    /// derived from `rand::rand_core::OsError`
+    #[from]
+    OsError(rand::rand_core::OsError),
+
     /// derived from `sqlx::Error` for database errors
     #[from]
     Sqlx(sqlx::Error),
@@ -38,11 +42,16 @@ pub enum Error {
     DatabaseConnection(String),         // failed database connection with the message passed back by the database itself
     DatabaseConnectionTestFailed,       // generated during a test of a new database connection
     PemCertFileReadSizeMismatch,        // generated when the buffer size does not match the size returned from the file read
+    PosionedSessionList,                // session shard could not be locked
+    ZeroLengthUUIDFound,                // uuids cannot be zero length, zero length found
     ServerCrash(String),                // generated if the HttpServer itself were to crash
     ServerModeOutOfRange,               // generated when the ToServerMode cannot match a database server mode value
+    SessionTokenLengthTooLong,          // client has provided a session token longer than required
+    SessionTokenLengthTooShort,         // client has provided a session token shorter than required
     SystemSettingsNotSet,               // generated on startup when attempting to change a system while it's set to None
     SystemSettingsRecordNotReturned,    // a system settings record was not available in the database
     SystemFlagOutOfRange,               // generated when the ToSystemFlag trait cannot match a database system flag value 
+    WrongUuidTypeForSessionHash,        // session hash requires a crypto uuid
 
     // disabled by default ↴
     DevError(String),
@@ -57,9 +66,14 @@ impl Display for Error {
             Error::DatabaseConnection(e) => write!(f, "[database] Error connecting to database with message: {e}"),
             Error::DatabaseConnectionTestFailed => write!(f, "[database] Sqlx returned a valid connection, but a subsequent connection test failed."),
             Error::PemCertFileReadSizeMismatch => write!(f, "[file:io] Failed to read pem-certificate."),
+            Error::PosionedSessionList => write!(f,"[sessions] Session shard could not be locked."),
+            Error::SessionTokenLengthTooLong => write!(f,"[sessions] Client provided session token out of bounds: too long."),
+            Error::SessionTokenLengthTooShort => write!(f,"[sessions] Client provided session token out of bounds: too short"),
             Error::ServerCrash(server_error) => write!(f,"[http server error] {server_error}"),
+            Error::ZeroLengthUUIDFound => write!(f, "[uuid] Invalid length provided to uuid generator"),
             Error::SystemSettingsRecordNotReturned => write!(f, "[database] System settings not found in database."),
             Error::DevError(dev_message) => write!(f,"[dev message] {dev_message}"),
+            Error::WrongUuidTypeForSessionHash => write!(f,"[sessions] Bad UUID type given for session hash"),
             _ => write!(f, "{self:?}")
         }
     }
