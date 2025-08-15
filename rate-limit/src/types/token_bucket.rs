@@ -101,3 +101,9 @@ impl TokenBucket {
         tokens
     }
 }
+
+impl Default for TokenBucket {
+    fn default() -> Self {
+        Self::new()
+    }
+}
