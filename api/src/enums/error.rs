@@ -41,6 +41,8 @@ pub enum Error {
 
     DatabaseConnection(String),         // failed database connection with the message passed back by the database itself
     DatabaseConnectionTestFailed,       // generated during a test of a new database connection
+    MalformedAuthorizationToken,        // authorization token did not 
+    MissingAuthorizationBearerInHeader, // authorization bearer was not present during an authorization check
     PemCertFileReadSizeMismatch,        // generated when the buffer size does not match the size returned from the file read
     PosionedSessionList,                // session shard could not be locked
     ZeroLengthUUIDFound,                // uuids cannot be zero length, zero length found
