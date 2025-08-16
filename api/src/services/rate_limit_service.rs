@@ -92,7 +92,8 @@ where
         if rate_limiter_status == Decision::Denied {
             // map fail into BoxBody
             let res = req
-                .into_response(HttpResponse::Forbidden().body("Forbidden"))
+                .into_response(HttpResponse::TooManyRequests()
+                .body("Rate limited"))
                 .map_into_right_body();
 
             return Box::pin(async move { Ok(res) });
