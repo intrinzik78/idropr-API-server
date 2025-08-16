@@ -10,7 +10,7 @@ use crate::{
         Error,
         PrimaryCommand
     },
-    services::RateLimitMiddleware,
+    services::{RateLimitMiddleware},
     types::{
         AppState,
         HeaderSettings,
@@ -35,14 +35,14 @@ impl ApiServer {
             };
 
             // build route services
-            let public = collection.public();
+            let routes = collection.v1();
 
             // load services into app
             actix_web::App::new()
                 .app_data(app_state.clone())
                 .wrap(RateLimitMiddleware)
                 .wrap(cors)
-                .service(public)
+                .service(routes)
         };
 
         // start server

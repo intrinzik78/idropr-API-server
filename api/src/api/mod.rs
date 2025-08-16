@@ -1,2 +1,3 @@
-pub mod private;
-pub mod public;
+mod health;
+
+pub use health::HealthCheck;

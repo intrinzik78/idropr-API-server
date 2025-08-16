@@ -1,6 +1,7 @@
 mod api_response;
 mod api_server;
 mod app_state;
+mod authorization_token;
 mod cli;
 mod env;
 mod header_settings;
@@ -14,6 +15,7 @@ mod software_access;
 
 pub mod users;
 
+pub use authorization_token::AuthorizationToken;
 pub use api_response::ApiResponse;
 pub use api_server::ApiServer;
 pub use app_state::AppState;
