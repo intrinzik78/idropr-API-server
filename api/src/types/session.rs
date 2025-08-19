@@ -8,7 +8,7 @@ use crate::{
 };
 
 const BASE_REFRESH_TIME:u64 = 60 * 10;      // 10 minutes
-const MAX_SESSION_AGE:u64 = 60 * 60 * 3;    // 3 days
+const MAX_SESSION_AGE:u64 = 60 * 60 * 24;   // 1 day
 
 #[derive(Clone,Debug)]
 pub struct Session {
@@ -51,12 +51,12 @@ impl Session {
     pub fn is_expired(&self) -> ExpiredStatus {
         let now = Instant::now();
         let time_to_expiration = Duration::from_secs(MAX_SESSION_AGE);
-        let expiration = now
+        let expiration = self.next_refresh
             .checked_add(time_to_expiration)
             .or(Some(now))
             .expect("unreachable after .or()");
 
-        if expiration > self.next_refresh {
+        if now > expiration {
             ExpiredStatus::Expired
         } else {
             ExpiredStatus::NotExpired
