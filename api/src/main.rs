@@ -7,7 +7,7 @@ pub mod types;
 
 // import packages
 use clap::Parser;
-use crate::types::RouteCollection;
+use crate::types::{GarbageCollectorInterval, RouteCollection};
 
 // internal types
 use {
@@ -43,6 +43,8 @@ async fn main() -> Result<()> {
 
     // add chron jobs / services here ↴
     let collection = RouteCollection;
+
+    let () = GarbageCollectorInterval::run(&arc_state).await;
 
     // build and run server ↴
     let server = ApiServer::run(run_command, arc_state, collection);

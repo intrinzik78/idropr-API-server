@@ -1,13 +1,25 @@
 mod has_permission;
+mod to_auth_token;
+mod to_base_64;
+mod from_base_64;
+mod to_key_set;
 mod to_number;
 mod to_permission;
 mod to_updated_result;
 mod to_server_mode;
 mod to_system_flag;
+mod to_user_type;
+mod to_user_account_status;
 
 pub use has_permission::HasPermission;
+pub use to_auth_token::ToHeaderAuthToken;
+pub use to_base_64::ToBase64;
+pub use from_base_64::FromBase64;
+pub use to_key_set::ToKeySet;
 pub use to_number::ToNumber;
 pub use to_permission::ToPermission;
 pub use to_updated_result::ToUpdatedResult;
 pub use to_server_mode::ToServerMode;
 pub use to_system_flag::ToSystemFlag;
+pub use to_user_type::ToUserType;
+pub use to_user_account_status::ToUserAccountStatus;

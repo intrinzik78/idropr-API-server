@@ -11,18 +11,18 @@ use std::task::{Context, Poll};
 
 use crate::{
     enums::{Permission,SessionControllerStatus},
-    types::{AppState, AuthorizationToken, SoftwareAccess}
+    types::{AppState, AuthorizationToken, UserPermissions}
 };
 
 /// target for the middleware service
 #[derive(Debug)]
 pub struct RouteLock {
-    required_rights: SoftwareAccess
+    required_permissions: UserPermissions
 }
 
 impl RouteLock {
-    pub fn default(required_rights: SoftwareAccess) -> RouteLock {
-        RouteLock { required_rights }
+    pub fn default(required_permissions: UserPermissions) -> RouteLock {
+        RouteLock { required_permissions }
     }
 }
 
@@ -41,7 +41,7 @@ where
     fn new_transform(&self, service: S) -> Self::Future {
         ok(RouteLockService {
             service: Rc::new(service),
-            required_rights: Rc::new(self.required_rights)
+            required_permissions: Rc::new(self.required_permissions)
         })
     }
 }
@@ -49,11 +49,11 @@ where
 #[derive(Debug)]
 pub struct RouteLockService<S> {
     pub service: Rc<S>,
-    pub required_rights: Rc<SoftwareAccess>
+    pub required_permissions: Rc<UserPermissions>
 }
 
 impl<S> RouteLockService<S> {
-    fn logic(shared: &Data<AppState>, token: &str, required_rights: &SoftwareAccess) -> Permission {
+    fn logic(shared: &Data<AppState>, token: &str, required_permissions: &UserPermissions) -> Permission {
         
         // extract rate limiter or return early if disabled
         let session_controller = match shared.sessions() {
@@ -61,9 +61,7 @@ impl<S> RouteLockService<S> {
             SessionControllerStatus::Disabled => return Permission::Granted
         };
 
-        println!("{:?}", required_rights);
-
-        match session_controller.permission_check(token, required_rights) {
+        match session_controller.permission_check(token, required_permissions) {
             Ok(permission) => permission,
             Err(_) => Permission::None
         }
@@ -87,18 +85,16 @@ where
     }
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        let required_rights = &self.required_rights;
+        let required_permissions = &self.required_permissions;
 
         let permission_status = match AuthorizationToken::extract(&req) {
             Ok(token) => {
                 req
                 .app_data()
-                .map_or(Permission::None, |shared: &Data<AppState>| RouteLockService::<S>::logic(shared, &token, required_rights))
+                .map_or(Permission::None, |shared: &Data<AppState>| RouteLockService::<S>::logic(shared, &token, required_permissions))
             },
             Err(_) => Permission::None
         };
-
-        println!("{:?}", permission_status);
 
         // return early with a Forbidden response
         if permission_status == Permission::None {

@@ -34,15 +34,15 @@ impl ApiServer {
                 PrimaryCommand::Prod => HeaderSettings::prod_cors() // production headers and limited origins accepted
             };
 
-            // build route services
-            let routes = collection.v1();
+            // build route service collections
+            let routes_v1 = collection.v1();
 
             // load services into app
             actix_web::App::new()
                 .app_data(app_state.clone())
                 .wrap(RateLimitMiddleware)
                 .wrap(cors)
-                .service(routes)
+                .service(routes_v1)
         };
 
         // start server
