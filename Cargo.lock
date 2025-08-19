@@ -1528,6 +1528,7 @@ dependencies = [
  "actix-rt",
  "actix-web",
  "aes-gcm",
+ "base64",
  "bcrypt",
  "blake3",
  "chrono",

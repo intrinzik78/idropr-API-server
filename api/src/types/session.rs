@@ -1,58 +1,65 @@
 use blake3::Hash;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use rand::random_range;
 
 use crate::{
-    enums::{User, UserAccountStatus, UserType},
-    types::{users::{BusinessUser, CommunityUser, SystemUser}, KeySet, SoftwareAccess}
+    enums::{ExpiredStatus, RefreshStatus, User},
+    types::KeySet
 };
+
+const BASE_REFRESH_TIME:u64 = 60 * 10;      // 10 minutes
+const MAX_SESSION_AGE:u64 = 60 * 60 * 3;    // 3 days
 
 #[derive(Clone,Debug)]
 pub struct Session {
     pub hash: Hash,
-    pub last_access: Instant,
+    pub next_refresh: Instant,
     pub user: User
 }
 
 impl Session {
 
     /// creates a new session container
-    pub fn new(key_set: &KeySet, user_type: UserType) -> Self {
-        let last_access = Instant::now();
-        let user = match user_type {
-            UserType::System => {
-                User::System(SystemUser {
-                    id: 0,
-                    username: None,
-                    hash: String::from("abc"),
-                    status: UserAccountStatus::Enabled,
-                    software_access: SoftwareAccess::default().with_accounts()
-                })
-            },
-            UserType::Community => {
-                User::Community(CommunityUser {
-                    id: 0,
-                    username: None,
-                    hash: String::from("abc"),
-                    status: UserAccountStatus::Enabled,
-                    software_access: SoftwareAccess::default().with_accounts()
-                })
-            },
-            UserType::Business => {
-                User::Business(BusinessUser {
-                    id: 0,
-                    business_id: 0,
-                    username: None,
-                    hash: String::from("abc"),
-                    status: UserAccountStatus::Enabled,
-                    software_access: SoftwareAccess::default().with_accounts()
-                })
-            },
-        };
+    pub fn new(key_set: &KeySet, user: User) -> Self {
+        let now = Instant::now();
+        let jitter = random_range(0.8..1.2);
+        let duration_secs = (BASE_REFRESH_TIME as f32 * jitter).trunc() as u64;
+        let next_refresh = now
+            .checked_add(Duration::from_secs(duration_secs))
+            .or(Some(now))
+            .expect("unreachable after .or()");
 
         Session {
             hash: key_set.hash,
-            last_access,
+            next_refresh,
             user
+        }
+    }
+
+    /// returns a refresh status
+    pub fn is_stale(&self) -> RefreshStatus {
+        let now = Instant::now();
+
+        if now > self.next_refresh {
+            RefreshStatus::Refresh
+        } else {
+            RefreshStatus::None
+        }
+    }
+
+    /// returns expired status
+    pub fn is_expired(&self) -> ExpiredStatus {
+        let now = Instant::now();
+        let time_to_expiration = Duration::from_secs(MAX_SESSION_AGE);
+        let expiration = now
+            .checked_add(time_to_expiration)
+            .or(Some(now))
+            .expect("unreachable after .or()");
+
+        if expiration > self.next_refresh {
+            ExpiredStatus::Expired
+        } else {
+            ExpiredStatus::NotExpired
         }
     }
 }

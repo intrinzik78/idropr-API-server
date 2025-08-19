@@ -1,43 +1,56 @@
 /// route collections pass incoming requests to endpoint handlers
-/// 
-/// middleware possibilities
-/// - session management
-/// - rate limiting
-/// - permission checks
 use actix_web::{web,Scope};
 
-use crate::api::public::HealthCheck;
+use crate::{
+    api::{
+        HealthCheck,
+        sessions
+    },
+    services::RouteLock,
+    types::UserPermissions
+};
 
 #[derive(Clone,Debug)]
 pub struct RouteCollection;
 
+/// main collector
 impl RouteCollection {
-    /// public get endpoints
-    pub fn public_get_collection(cfg: &mut web::ServiceConfig) {
-        cfg.route("/healthz", web::get().to(HealthCheck::logic));
+    /// main route scope builder
+    pub fn v1(&self) -> Scope {
+        Scope::new("/v1")
+            .configure(RouteCollection::health)
+            .configure(RouteCollection::sessions)
+    }
+}
+
+
+impl RouteCollection {
+    /// returns server health
+    pub fn health(cfg: &mut web::ServiceConfig) {
+        cfg.route("/health", web::get().to(HealthCheck::logic));
+        //.wrap(RouteLock::default(UserPermissions::default()))
     }
 
-    /// public post endpoints
-    pub fn public_post_collection(_cfg: &mut web::ServiceConfig) {
-
+    /// sessions resource and endpoints
+    pub fn sessions(cfg: &mut web::ServiceConfig) {
+        cfg.route("/sessions", web::post().to(sessions::SessionsPost::logic));
+        
+        let permissions = UserPermissions::default().with_sessions_delete();
+        cfg.route("/sessions", web::delete().to(sessions::SessionsDelete::logic).wrap(RouteLock::default(permissions)));
+    }
+    
+    /// users resource and endpoints
+    pub fn users(_cfg: &mut web::ServiceConfig) {
+        todo!()
     }
 
-    /// private get endpoints
-    pub fn private_get_collection(_cfg: &mut web::ServiceConfig) {
-
+    /// buckets resource and endpoints
+    pub fn buckets(_cfg: &mut web::ServiceConfig) {
+        todo!()
     }
 
-    /// private post endpoints
-    pub fn private_post_collection(_cfg: &mut web::ServiceConfig) {
-
-    }
-
-    pub fn public(&self) -> Scope {
-        Scope::new("/public")
-            .configure(RouteCollection::public_get_collection)
-    }
-
-    pub fn private(&self) -> Scope {
-        Scope::new("/private")
+    /// images resource and endpoints
+    pub fn images(_cfg: &mut web::ServiceConfig) {
+        todo!()
     }
 }

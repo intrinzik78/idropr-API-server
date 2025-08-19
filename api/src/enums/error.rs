@@ -15,6 +15,9 @@ pub enum Error {
     #[from]
     Actix(actix_web::Error),
 
+    #[from]
+    Base64(base64::DecodeError),
+
     /// derived from `rand::rand_core::OsError`
     #[from]
     OsError(rand::rand_core::OsError),
@@ -38,13 +41,12 @@ pub enum Error {
     /// Utf8 errors are generated during decryption when Vec<u8> is converted to plain text
     #[from]
     FromUtf8Error(FromUtf8Error),
-
     DatabaseConnection(String),         // failed database connection with the message passed back by the database itself
     DatabaseConnectionTestFailed,       // generated during a test of a new database connection
     MalformedAuthorizationToken,        // authorization token did not 
     MissingAuthorizationBearerInHeader, // authorization bearer was not present during an authorization check
     PemCertFileReadSizeMismatch,        // generated when the buffer size does not match the size returned from the file read
-    PosionedSessionList,                // session shard could not be locked
+    PoisonedSessionList,                // session shard could not be locked
     ZeroLengthUUIDFound,                // uuids cannot be zero length, zero length found
     ServerCrash(String),                // generated if the HttpServer itself were to crash
     ServerModeOutOfRange,               // generated when the ToServerMode cannot match a database server mode value
@@ -53,6 +55,8 @@ pub enum Error {
     SystemSettingsNotSet,               // generated on startup when attempting to change a system while it's set to None
     SystemSettingsRecordNotReturned,    // a system settings record was not available in the database
     SystemFlagOutOfRange,               // generated when the ToSystemFlag trait cannot match a database system flag value 
+    UserAccountStatusOutOfBounds,       // generated when ToUserAccountStatus cannot parse a value into a UserAccountStatus enum
+    UserTypeOutOfBounds,                // generated when a user type id (database) cannot be parsed into a user type
     WrongUuidTypeForSessionHash,        // session hash requires a crypto uuid
 
     // disabled by default ↴
@@ -68,12 +72,13 @@ impl Display for Error {
             Error::DatabaseConnection(e) => write!(f, "[database] Error connecting to database with message: {e}"),
             Error::DatabaseConnectionTestFailed => write!(f, "[database] Sqlx returned a valid connection, but a subsequent connection test failed."),
             Error::PemCertFileReadSizeMismatch => write!(f, "[file:io] Failed to read pem-certificate."),
-            Error::PosionedSessionList => write!(f,"[sessions] Session shard could not be locked."),
+            Error::PoisonedSessionList => write!(f,"[sessions] Session shard could not be locked."),
             Error::SessionTokenLengthTooLong => write!(f,"[sessions] Client provided session token out of bounds: too long."),
             Error::SessionTokenLengthTooShort => write!(f,"[sessions] Client provided session token out of bounds: too short"),
             Error::ServerCrash(server_error) => write!(f,"[http server error] {server_error}"),
             Error::ZeroLengthUUIDFound => write!(f, "[uuid] Invalid length provided to uuid generator"),
             Error::SystemSettingsRecordNotReturned => write!(f, "[database] System settings not found in database."),
+            Error::UserTypeOutOfBounds => write!(f,"[api] invalid user type given"),
             Error::DevError(dev_message) => write!(f,"[dev message] {dev_message}"),
             Error::WrongUuidTypeForSessionHash => write!(f,"[sessions] Bad UUID type given for session hash"),
             _ => write!(f, "{self:?}")

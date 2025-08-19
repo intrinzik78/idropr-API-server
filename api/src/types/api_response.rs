@@ -73,6 +73,11 @@ where T: Serialize
 /// commonly used and standard response types
 impl ApiResponse<()> {
 
+    /// 200,OK success response shortcut
+    pub fn success() -> HttpResponse {
+        ApiResponse::<()>::default().ok()
+    }
+
     /// standard unauthorized response
     pub fn unauthorized() -> Self {
         ApiResponse::default()
