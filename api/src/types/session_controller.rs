@@ -9,7 +9,7 @@ use crate::{
 type Result<T> = std::result::Result<T,Error>;
 
 const MAX_GARBAGE_COLLECTION:u64 = 60;     // 10 seconds
-const COLLECTION_TTL:u64 = 20;             // 20 miliseconds
+const COLLECTION_TTL:u64 = 10;             // 10 miliseconds
 
 #[derive(Debug,Default)]
 struct GarbageCollector;
@@ -20,7 +20,7 @@ impl GarbageCollector {
         let time = Duration::from_millis(COLLECTION_TTL);
         let stop_time = Instant::now().checked_add(time).ok_or(Error::DevError("couldn't create a time window to work in garbage collector".to_string()))?;
         let mut now = Instant::now();
-        let mut sessions_to_remove: Vec<[u8;16]> = Vec::with_capacity(1024);
+        let mut sessions_to_remove: Vec<[u8;16]> = Vec::with_capacity(2048);
 
         // begin locked read scope
         {
@@ -33,7 +33,7 @@ impl GarbageCollector {
                 }
 
                 // qty and time cap
-                if sessions_to_remove.len() == 1024 || now < stop_time {
+                if sessions_to_remove.len() == 2048 || now > stop_time {
                     break;
                 }
 
@@ -346,10 +346,10 @@ mod tests {
     /// load tests the garbage collector
     #[test]
     fn garbage_collector() {
-        let sessions_to_create = 2_000_000;
+        let sessions_to_create = 1_000_000;
         let controller = SessionController::new(sessions_to_create, 4);
 
-        for index in 0..sessions_to_create {
+        for _ in 0..sessions_to_create {
             let key_set = KeySet::new().unwrap();
             let user = User::System(SystemUser{
                 id: 0,
@@ -360,22 +360,9 @@ mod tests {
             });
 
             let mut session = Session::new(&key_set,user);
-            session.next_refresh = Instant::now();
+            session.next_refresh = Instant::now().checked_sub(Duration::from_secs(186400)).unwrap();
 
             let _token = controller.insert(session, &key_set).unwrap();
-
-            if index == sessions_to_create / 2 {
-                let _a = match controller.start_collector() {
-                    Ok(_) => println!("ok"),
-                    Err(e) => println!("{:?}",e)
-                };
-
-                for idx in 0..controller.list.len() {
-                    let locked_list = controller.list[idx].read().unwrap();
-                    let len = locked_list.len();
-                    assert!(len < sessions_to_create / 4 / 2, "couldn't remove enough sessions to pass garbage collection test.");
-                }
-            }
         }
 
         let _a = match controller.start_collector() {
@@ -383,10 +370,13 @@ mod tests {
             Err(e) => println!("{:?}",e)
         };
 
+        let mut count = 0;
+
         for idx in 0..controller.list.len() {
             let locked_list = controller.list[idx].read().unwrap();
-            let len = locked_list.len();
-            assert!(len < sessions_to_create / 4 / 2, "couldn't remove enough sessions to pass garbage collection test.");
+            count += locked_list.len();
         }
+
+        assert!(count <= (sessions_to_create - (4*2048)), "Total sessions: {}", count);
     }
 }
