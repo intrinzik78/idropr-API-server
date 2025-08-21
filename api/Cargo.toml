@@ -1,6 +1,6 @@
 [package]
 name = "idropr-server"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2024"
 
 authors = ["Josh Briggs", "Josh Briggs <josh@derivemore.com"]
