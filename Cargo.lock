@@ -1522,7 +1522,7 @@ dependencies = [
 
 [[package]]
 name = "idropr-server"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "actix-cors",
  "actix-rt",
@@ -2098,7 +2098,7 @@ dependencies = [
 
 [[package]]
 name = "rate-limit"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "derive_more 1.0.0",

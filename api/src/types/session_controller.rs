@@ -112,7 +112,7 @@ impl SessionController {
 
     /// returns a new session controller
     pub fn new(capacity: usize, threads: usize) -> Self {
-        let garbage_collector = GarbageCollector::default();
+        let garbage_collector = GarbageCollector;
 
         // double check threads > 0
         let threads_checked = {
