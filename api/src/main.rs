@@ -7,19 +7,11 @@ pub mod types;
 
 // import packages
 use clap::Parser;
-use crate::types::{GarbageCollectorInterval, RouteCollection};
 
 // internal types
 use {
-    enums::{
-        Error,
-        PrimaryCommand
-    },
-    types::{
-        ApiServer,
-        Cli,
-        Env
-    }
+    enums::{Error,PrimaryCommand},
+    types::{ApiServer,Cli,Env,RateLimitSweeper,RouteCollection,SessionSweeper}
 };
 
 type Result<T> = std::result::Result<T,Error>;
@@ -41,10 +33,14 @@ async fn main() -> Result<()> {
     // move state into ARC ref
     let arc_state = actix_web::web::Data::new(initial_state);
 
-    // add chron jobs / services here ↴
+    // add api versions here ↴
     let collection = RouteCollection;
 
-    let () = GarbageCollectorInterval::run(&arc_state).await;
+    // add chron jobs here ↴
+    {
+        let () = SessionSweeper::run(&arc_state).await;
+        let () = RateLimitSweeper::run(&arc_state).await;
+    }
 
     // build and run server ↴
     let server = ApiServer::run(run_command, arc_state, collection);

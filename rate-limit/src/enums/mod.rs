@@ -1,4 +1,5 @@
 mod bucket_refill_rate;
+mod bucket_status;
 mod list_status;
 mod decision;
 mod rate_limit_error;
@@ -6,6 +7,7 @@ mod timer_status;
 mod time_window;
 
 pub use bucket_refill_rate::RefillRate;
+pub use bucket_status::BucketStatus;
 pub use list_status::ListStatus;
 pub use decision::Decision;
 pub use rate_limit_error::RateLimitError;

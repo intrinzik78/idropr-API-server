@@ -5,9 +5,9 @@ use crate::{
     types::AppState
 };
 
-pub struct GarbageCollectorInterval;
+pub struct SessionSweeper;
 
-impl GarbageCollectorInterval {
+impl SessionSweeper {
     pub async fn run(arc_state: &Data<AppState>) {
         let app_state = arc_state.clone();
 

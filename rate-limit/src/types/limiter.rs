@@ -1,65 +1,143 @@
 /// the primary purpose of the rate limiter is to deter good actors from overusing resources, not necessarily to deter DDOS attacks.
 use std::{
+    cmp::Reverse,
+    collections::{hash_map::{DefaultHasher, HashMap,},BinaryHeap},
     hash::{Hash,Hasher},
-    collections::hash_map::{
-        DefaultHasher,
-        HashMap
-    },
     net::IpAddr,
-    sync::{Mutex, RwLock}
+    sync::{Mutex, RwLock},
+    time::{Duration, Instant}
 };
 
 use crate::{
-    enums::{
-        Decision,
-        ListStatus,
-        RateLimitError,
-        RefillRate
-    },
-    traits::{
-        ToBlackListStatus,
-        ToWhiteListStatus
-    },
-    types::{
-        RateLimitBuilder,
-        Timer,
-        TokenBucket
-    }
+    enums::{BucketStatus, Decision, ListStatus, RateLimitError, RefillRate},
+    traits::{ToBlackListStatus,ToWhiteListStatus},
+    types::{HeapKey,RateLimitBuilder,Timer,TokenBucket}
 };
 
 type Result<T> = std::result::Result<T,RateLimitError>;
 
-const BLACK_LIST_TIME:u64 = 60;
-const BLACK_LIST_LIMIT:i32 = -25;
-const SHARD_FACTOR:usize = 2;       // 2 shards per worker thread
+const BLACK_LIST_TIME:u64   = 60;
+const BLACK_LIST_LIMIT:i32  = -25;
+const SHARD_FACTOR:usize    = 2;    // 2 shards per worker thread
+const INTERVAL_SECS:u64     = 15;   // 60 second u64 for a duration
+const BASE_GC_WORK:usize    = 1024;
+
+#[derive(Debug,Default)]
+struct GarbageCollector;
+
+impl GarbageCollector {
+    pub fn sweep(&self, shard_lock: &ShardLock) -> Result<()> {
+        let mut locked_shard = shard_lock.inner
+            .lock()
+            .map_err(|_e| RateLimitError::PoisonedRateLimiterMap)?;
+
+        // configure max-work timer
+        let timer = Duration::from_millis(20);
+        let stop_time = Instant::now()
+            .checked_add(timer)
+            .or(Some(Instant::now()))
+            .expect("unreachable after .or()");
+
+        // determine max number of work cycles on the map (heap should be fast, no limits there)
+        let max_work_cycles = match locked_shard.map.len() {
+            0   => return Ok(()), // no work to do
+            1.. => BASE_GC_WORK.max(locked_shard.map.len() / 20) // work on a max of 5% of buckets as the map grows
+        };
+
+        let mut cur_work_cycle: usize = 0;
+
+        while let Some(Reverse(heap_key)) = locked_shard.heap.peek() {
+            let now = Instant::now();
+
+            // extract HeapKey data and drop mutable reference to locked_shard
+            let HeapKey {expires_at,ver,ip} = heap_key.clone();
+
+            if now > expires_at {
+                // remove stale heap entry
+                locked_shard.heap.pop();
+
+                // compare version numbers and remove expired entries
+                if let Some(bucket) = locked_shard.map.get(&ip) {
+                    if ver == bucket.ver() && bucket.is_expired() == BucketStatus::Expired {
+                        locked_shard.map.remove(&ip);
+                    }
+                }
+
+                cur_work_cycle += 1;
+
+            } else {
+                break;
+            }
+
+            // quick work window expiration check
+            if cur_work_cycle >= max_work_cycles || now >= stop_time {
+                break;
+            }
+        }
+        
+        Ok(())
+    }
+}
 
 #[derive(Debug)]
-#[allow(dead_code)]
+struct Inner {
+    pub map: HashMap<IpAddr,TokenBucket>,
+    pub heap: BinaryHeap<Reverse<HeapKey>>
+}
+
+impl Inner {
+    pub fn new(size: usize) -> Self {
+        let map = HashMap::with_capacity(size);
+        let heap = BinaryHeap::new();
+        Self {
+            map,
+            heap
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ShardLock {
+    pub inner: Mutex<Inner>
+}
+
+impl ShardLock {
+    pub fn new(size: usize) -> Self {
+        let unlocked_inner = Inner::new(size);
+        let inner = Mutex::new(unlocked_inner);
+
+        Self {
+            inner
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct RateLimiter {
-    shards: Vec<Mutex<HashMap<IpAddr,TokenBucket>>>,
+    shards: Vec<ShardLock>,
     blacklist:  RwLock<HashMap<IpAddr,Timer>>,
     whitelist:  RwLock<HashMap<IpAddr,Timer>>,
     max_tokens_per_bucket: u32,
     initial_tokens_per_bucket: u32,
-    base_refill_rate: RefillRate
+    base_refill_rate: RefillRate,
+    garbage_collector: GarbageCollector
 }
 
 impl RateLimiter {
     /// takes the builder and passes back the RateLimiter
     pub fn new(builder: RateLimitBuilder) -> Self {
+        let garbage_collector = GarbageCollector::default();
+
         let shard_number = SHARD_FACTOR * builder.threads;
-        let mut shards: Vec<Mutex<HashMap<IpAddr,TokenBucket>>> = Vec::with_capacity(shard_number);
+        let mut shards: Vec<ShardLock> = Vec::with_capacity(shard_number);
         
         // build shard list
         for _ in 0..shard_number {
             // clone the pre-configured hashmap
-            let map = builder.map.clone();
-
-            // apply the mutex
-            let locked_map = Mutex::new(map);
-
+            let shard = ShardLock::new(100);
+           
             // push as a shard
-            shards.push(locked_map);
+            shards.push(shard);
         }
 
         // assemble RateLImiter
@@ -69,7 +147,26 @@ impl RateLimiter {
             whitelist: RwLock::new(builder.whitelist),
             max_tokens_per_bucket: builder.bucket_capacity,
             initial_tokens_per_bucket: builder.initial_tokens_per_bucket,
-            base_refill_rate: builder.refill_rate
+            base_refill_rate: builder.refill_rate,
+            garbage_collector
+        }
+    }
+
+    /// provides a mechanism to run garbage collection from outside the main thread
+    pub async fn watch(&self) {
+        let time = Duration::from_secs(INTERVAL_SECS);
+        let mut interval = tokio::time::interval(time);
+
+        loop {
+            interval.tick().await;
+            self.start_collector();
+        }
+    }
+
+    /// starts garbage collector
+    fn start_collector(&self) {
+        for idx in 0..self.shards.len() {
+            let _ = self.garbage_collector.sweep(&self.shards[idx]);
         }
     }
 
@@ -152,10 +249,17 @@ impl RateLimiter {
         hash % shard_count
     }
 
-    /// entry point for a conenction
+    fn create_heap_key(&self, bucket: &TokenBucket, ip_addr: &IpAddr) -> HeapKey {
+        HeapKey {
+            expires_at: bucket.expires_at(),
+            ver: bucket.ver(),
+            ip: ip_addr.clone()
+        }
+    }
+
+    /// entry point for a connection
     pub fn try_connect(&self, ip_address: &str) -> Result<Decision> {
         let ip_address: IpAddr = ip_address.parse()?;
-        let block_id = self.hash(&ip_address);
 
         // early return, no mutex locked
         if self.is_blacklisted(ip_address)? == ListStatus::Blacklisted {
@@ -170,34 +274,40 @@ impl RateLimiter {
         let mut blacklist_flag = ListStatus::None;
 
         // begin locked scope
-        let result = {
-            let locked_list = &mut self.shards[block_id]
+        let decision = {
+            let idx = self.hash(&ip_address);
+            let locked_list = &mut self
+                .shards[idx]
+                .inner
                 .lock()
                 .map_err(|_e| RateLimitError::PoisonedRateLimiterMap)?;
 
-            match locked_list.get_mut(&ip_address) {
-                Some(bucket) => {
-                    let tokens_remaining = bucket.drip();
+            // check for existing bucket or create one
+            if let Some(bucket) = locked_list.map.get_mut(&ip_address) {
+                let decision = bucket.drip();
 
-                    if tokens_remaining < BLACK_LIST_LIMIT {
+                // bump on approval, test for blacklist on denial
+                if decision == Decision::Approved {
+                    let key = self.create_heap_key(bucket, &ip_address);
+                    locked_list.heap.push(Reverse(key));
+                } else {
+                    if bucket.tokens() < BLACK_LIST_LIMIT {
                         blacklist_flag = ListStatus::Blacklisted
                     }
-
-                    match tokens_remaining {
-                        ..1   => Decision::Denied,
-                        1..   => Decision::Approved
-                   }
-                },
-                None => {
-                    let bucket = TokenBucket::new()
-                        .with_capacity(self.max_tokens_per_bucket)
-                        .with_initial_tokens(self.initial_tokens_per_bucket)
-                        .with_refill_rate(self.base_refill_rate.clone());
-
-                    locked_list.insert(ip_address, bucket);
-
-                    Decision::Approved
                 }
+
+                decision
+            } else {
+                let bucket = TokenBucket::new()
+                    .with_capacity(self.max_tokens_per_bucket)
+                    .with_initial_tokens(self.initial_tokens_per_bucket)
+                    .with_refill_rate(self.base_refill_rate.clone());
+
+                let key = self.create_heap_key(&bucket, &ip_address);
+                locked_list.heap.push(Reverse(key));
+                locked_list.map.insert(ip_address, bucket);
+
+                Decision::Approved
             }
         };
         // end locked scope
@@ -206,7 +316,7 @@ impl RateLimiter {
             self.add_to_blacklist(ip_address,BLACK_LIST_TIME)?;
         }
 
-        Ok(result)
+        Ok(decision)
     }
 }
 

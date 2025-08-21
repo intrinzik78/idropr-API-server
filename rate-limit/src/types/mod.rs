@@ -1,8 +1,10 @@
+mod heap_key;
 mod limiter;
 mod token_bucket;
 mod rate_limit_builder;
 mod timer;
 
+pub use heap_key::HeapKey;
 pub use limiter::RateLimiter;
 pub use rate_limit_builder::RateLimitBuilder;
 pub use token_bucket::TokenBucket;
