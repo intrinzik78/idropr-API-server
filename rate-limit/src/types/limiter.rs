@@ -126,7 +126,7 @@ pub struct RateLimiter {
 impl RateLimiter {
     /// takes the builder and passes back the RateLimiter
     pub fn new(builder: RateLimitBuilder) -> Self {
-        let garbage_collector = GarbageCollector::default();
+        let garbage_collector = GarbageCollector;
 
         let shard_number = SHARD_FACTOR * builder.threads;
         let mut shards: Vec<ShardLock> = Vec::with_capacity(shard_number);
@@ -253,7 +253,7 @@ impl RateLimiter {
         HeapKey {
             expires_at: bucket.expires_at(),
             ver: bucket.ver(),
-            ip: ip_addr.clone()
+            ip: *ip_addr
         }
     }
 
@@ -286,15 +286,19 @@ impl RateLimiter {
             if let Some(bucket) = locked_list.map.get_mut(&ip_address) {
                 let decision = bucket.drip();
 
-                // bump on approval, test for blacklist on denial
-                if decision == Decision::Approved {
-                    let key = self.create_heap_key(bucket, &ip_address);
-                    locked_list.heap.push(Reverse(key));
-                } else {
-                    if bucket.tokens() < BLACK_LIST_LIMIT {
-                        blacklist_flag = ListStatus::Blacklisted
+                match decision {
+                    // push success to heap
+                    Decision::Approved => {
+                        let key = self.create_heap_key(bucket, &ip_address);
+                        locked_list.heap.push(Reverse(key));
+                    },
+                    // check for blacklist on deny
+                    Decision::Denied => {
+                        if bucket.tokens() < BLACK_LIST_LIMIT {
+                            blacklist_flag = ListStatus::Blacklisted
+                        }
                     }
-                }
+                };
 
                 decision
             } else {

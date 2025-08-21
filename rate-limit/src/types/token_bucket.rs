@@ -37,6 +37,11 @@ impl TokenBucket {
 
     /// last connect getter
     pub fn last_connect(&self) -> Instant {
+        self.last_connect
+    }
+
+    /// last refill getter
+    pub fn last_refill(&self) -> Instant {
         self.last_refill
     }
 
@@ -52,7 +57,7 @@ impl TokenBucket {
             RefillRate::PerDay(_)    => Duration::from_secs(MIN_BUCKET_TTL.max(DAY_AS_SECS as u64)),
             RefillRate::PerHour(_)   => Duration::from_secs(MIN_BUCKET_TTL.max(HOUR_AS_SECS as u64)),
             RefillRate::PerMinute(_) => Duration::from_secs(MIN_BUCKET_TTL.max(MINUTE_AS_SECS as u64)),
-            RefillRate::PerSecond(_) => Duration::from_secs(MIN_BUCKET_TTL.max(MIN_BUCKET_TTL as u64)),
+            RefillRate::PerSecond(_) => Duration::from_secs(MIN_BUCKET_TTL.max(MIN_BUCKET_TTL)),
         };
         
         self.last_connect
@@ -70,7 +75,7 @@ impl TokenBucket {
             RefillRate::PerDay(_)    => Duration::from_secs(MIN_BUCKET_TTL.max(DAY_AS_SECS as u64)),
             RefillRate::PerHour(_)   => Duration::from_secs(MIN_BUCKET_TTL.max(HOUR_AS_SECS as u64)),
             RefillRate::PerMinute(_) => Duration::from_secs(MIN_BUCKET_TTL.max(MINUTE_AS_SECS as u64)),
-            RefillRate::PerSecond(_) => Duration::from_secs(MIN_BUCKET_TTL.max(MIN_BUCKET_TTL as u64)),
+            RefillRate::PerSecond(_) => Duration::from_secs(MIN_BUCKET_TTL.max(MIN_BUCKET_TTL)),
         };
         let expire_time = self.last_connect
             .checked_add(time)

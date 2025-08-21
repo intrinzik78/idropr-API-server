@@ -13,9 +13,7 @@ impl RateLimitSweeper {
 
         let _garbage_collector = actix_web::rt::spawn(async move {
             match app_state.rate_limiter() {
-                RateLimiterStatus::Enabled(limiter) => {
-                    limiter.watch().await
-                },
+                RateLimiterStatus::Enabled(limiter) => limiter.watch().await,
                 RateLimiterStatus::Disabled => {}
             }
         });
