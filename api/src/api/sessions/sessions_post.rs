@@ -1,7 +1,7 @@
 use actix_web::{web,Responder};
 use serde::{Deserialize, Serialize};
 
-use crate::{enums::{Error, SessionControllerStatus, User}, types::{ApiResponse, AppState, DatabaseConnection, KeySet, Session}};
+use crate::{enums::{Error, SessionControllerStatus, User, VerificationStatus}, traits::VerifyPassword, types::{ApiResponse, AppState, DatabaseConnection, KeySet, Session}};
 
 #[derive(Debug,Deserialize)]
 pub struct Post {
@@ -48,15 +48,20 @@ impl SessionsPost {
                 },
                 Err(_e) => {
                     // log here
-                    return ApiResponse::server_error().error();
+                    return ApiResponse::unauthorized().ok();
                 }
             }
         };
 
+        // verify password against hash from database
+        if user.verify_password(&post.password) == VerificationStatus::Unverified {
+            return ApiResponse::unauthorized().ok();
+        }
+
         // create a key set
         let key_set = match  KeySet::new() {
             Ok(set) => set,
-            Err(_e) => return ApiResponse::server_error().error()
+            Err(_e) => return ApiResponse::unauthorized().ok()
         };
 
         // get session controller
@@ -64,7 +69,7 @@ impl SessionsPost {
             SessionControllerStatus::Enabled(s) => s,
             SessionControllerStatus::Disabled => {
                 // log here
-                return ApiResponse::server_error().error()
+                return ApiResponse::unauthorized().ok();
             }
         };
 
@@ -76,7 +81,7 @@ impl SessionsPost {
             Ok(t) => t,
             Err(_e) => {
                 // log here
-                return ApiResponse::server_error().error()
+                return ApiResponse::unauthorized().ok();
             }
         };
 

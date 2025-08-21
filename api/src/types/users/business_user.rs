@@ -1,8 +1,8 @@
 use sqlx::FromRow;
 
 use crate::{
-    enums::{Error,UserAccountStatus},
-    traits::ToUserAccountStatus,
+    enums::{Error,UserAccountStatus,VerificationStatus},
+    traits::{ToUserAccountStatus,ToVerificationStatus},
     types::{DatabaseConnection, UserPermissions}
 };
 
@@ -62,6 +62,13 @@ impl BusinessUser {
             Ok(Some(user))
         } else {
             Ok(None)
+        }
+    }
+
+    pub fn verify(&self, password: &str) -> VerificationStatus {
+        match bcrypt::verify(password, &self.hash) {
+            Ok(b)  => b.to_verification_status(),
+            Err(_e) => VerificationStatus::Unverified
         }
     }
 }

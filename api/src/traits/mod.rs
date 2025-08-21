@@ -10,6 +10,8 @@ mod to_server_mode;
 mod to_system_flag;
 mod to_user_type;
 mod to_user_account_status;
+mod to_verification_status;
+mod verify_password;
 
 pub use has_permission::HasPermission;
 pub use to_auth_token::ToHeaderAuthToken;
@@ -23,3 +25,5 @@ pub use to_server_mode::ToServerMode;
 pub use to_system_flag::ToSystemFlag;
 pub use to_user_type::ToUserType;
 pub use to_user_account_status::ToUserAccountStatus;
+pub use to_verification_status::ToVerificationStatus;
+pub use verify_password::VerifyPassword;
