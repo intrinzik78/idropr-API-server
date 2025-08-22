@@ -1,4 +1,5 @@
 mod api_result;
+mod authorization_status;
 mod connection_status;
 mod error;
 mod expired_status;
@@ -18,6 +19,7 @@ mod session_controller_status;
 mod verification_status;
 
 pub use api_result::ApiResult;
+pub use authorization_status::AuthorizationStatus;
 pub use connection_status::ConnectionStatus;
 pub use error::Error;
 pub use expired_status::ExpiredStatus;
