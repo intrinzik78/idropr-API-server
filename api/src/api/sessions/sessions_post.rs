@@ -1,7 +1,7 @@
 use actix_web::{web,Responder};
 use serde::{Deserialize, Serialize};
 
-use crate::{enums::{Error, SessionControllerStatus, User, VerificationStatus}, traits::VerifyPassword, types::{ApiResponse, AppState, DatabaseConnection, KeySet, Session}};
+use crate::{enums::{AuthorizationStatus, Error, SessionControllerStatus, User}, traits::VerifyPassword, types::{ApiResponse, AppState, DatabaseConnection, KeySet, Session}};
 
 #[derive(Debug,Deserialize)]
 pub struct Post {
@@ -54,7 +54,7 @@ impl SessionsPost {
         };
 
         // verify password against hash from database
-        if user.verify_password(&post.password) == VerificationStatus::Unverified {
+        if user.verify_password(&post.password) == AuthorizationStatus::Unauthorized {
             return ApiResponse::unauthorized().ok();
         }
 

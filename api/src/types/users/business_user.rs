@@ -65,7 +65,7 @@ impl BusinessUser {
         }
     }
 
-    pub fn verify(&self, password: &str) -> AuthorizationStatus {
+    pub fn is_authorized(&self, password: &str) -> AuthorizationStatus {
         match bcrypt::verify(password, &self.hash) {
             Ok(b)  => b.to_authorization_status(),
             Err(_e) => AuthorizationStatus::Unauthorized
