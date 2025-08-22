@@ -8,9 +8,9 @@ pub trait VerifyPassword {
 impl VerifyPassword for User {
     fn verify_password(&self, password: &str) -> AuthorizationStatus {
         match self {
-            User::System(u) => u.is_authorized(password),
-            User::Business(u) => u.is_authorized(password),
-            User::Community(u) => u.is_authorized(password)
+            User::System(u) => u.verify_password(password),
+            User::Business(u) => u.verify_password(password),
+            User::Community(u) => u.verify_password(password)
         }
     }
 }
