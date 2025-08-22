@@ -1,5 +1,6 @@
 mod has_permission;
 mod to_auth_token;
+mod to_authorization_status;
 mod to_base_64;
 mod from_base_64;
 mod to_key_set;
@@ -15,6 +16,7 @@ mod verify_password;
 
 pub use has_permission::HasPermission;
 pub use to_auth_token::ToHeaderAuthToken;
+pub use to_authorization_status::ToAuthorizationStatus;
 pub use to_base_64::ToBase64;
 pub use from_base_64::FromBase64;
 pub use to_key_set::ToKeySet;

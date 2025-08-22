@@ -2,8 +2,8 @@ use bcrypt;
 use sqlx::FromRow;
 
 use crate::{
-    enums::{Error,UserAccountStatus, VerificationStatus},
-    traits::{ToUserAccountStatus,ToVerificationStatus},
+    enums::{Error,UserAccountStatus, AuthorizationStatus},
+    traits::{ToUserAccountStatus,ToAuthorizationStatus},
     types::{DatabaseConnection, UserPermissions}
 };
 
@@ -64,10 +64,10 @@ impl SystemUser {
         }
     }
 
-    pub fn verify(&self, password: &str) -> VerificationStatus {
+    pub fn is_authorized(&self, password: &str) -> AuthorizationStatus {
         match bcrypt::verify(password, &self.hash) {
-            Ok(b)  => b.to_verification_status(),
-            Err(_e) => VerificationStatus::Unverified
+            Ok(b)  => b.to_authorization_status(),
+            Err(_e) => AuthorizationStatus::Unauthorized
         }
     }
 }
