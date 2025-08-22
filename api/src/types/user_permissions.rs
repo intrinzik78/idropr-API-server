@@ -12,6 +12,9 @@ type Result<T> = std::result::Result<T,Error>;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UserPermissions {
+    pub admin_read: Permission,
+    pub admin_write: Permission,
+    pub admin_delete: Permission,
     pub buckets_read: Permission,
     pub buckets_write: Permission,
     pub buckets_delete: Permission,
@@ -28,6 +31,9 @@ pub struct UserPermissions {
 
 #[derive(Debug, Clone, FromRow)]
 struct DatabaseHelper {
+    admin_read: i8,
+    admin_write: i8,
+    admin_delete: i8,
     buckets_read: i8,
     buckets_write: i8,
     buckets_delete: i8,
@@ -45,6 +51,9 @@ struct DatabaseHelper {
 impl DatabaseHelper {
     pub fn transform(self) -> UserPermissions {
         UserPermissions {
+            admin_read: self. admin_read.to_permission(),
+            admin_write: self. admin_write.to_permission(),
+            admin_delete: self. admin_delete.to_permission(),
             buckets_read: self.buckets_read.to_permission(),
             buckets_write: self.buckets_write.to_permission(),
             buckets_delete: self.buckets_delete.to_permission(),
@@ -64,6 +73,9 @@ impl DatabaseHelper {
 // async
 impl UserPermissions {
     pub async fn into_db_as_transaction(user_id: i64, access_rights: UserPermissions, tx: &mut Transaction<'static,MySql>) -> Result<u64> {
+        let admin_read = access_rights.admin_read.to_i8();        
+        let admin_write = access_rights.admin_write.to_i8();        
+        let admin_delete = access_rights.admin_delete.to_i8();            
         let buckets_read = access_rights.buckets_read.to_i8();
         let buckets_write = access_rights.buckets_write.to_i8();
         let buckets_delete = access_rights.buckets_delete.to_i8();
@@ -79,6 +91,9 @@ impl UserPermissions {
 
         let sql = "INSERT INTO `user_permissions` (id,buckets_read,buckets_write,buckets_delete,images_read,images_write,images_delete,users_read,users_write,users_delete,sessions_read,sessions_write,sessions_delete) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)";
         let insert_id = sqlx::query(sql)
+            .bind(admin_read)                    
+            .bind(admin_write)            
+            .bind(admin_delete)                    
             .bind(user_id)
             .bind(buckets_read)
             .bind(buckets_write)
@@ -114,6 +129,21 @@ impl UserPermissions {
 
 // builder functions
 impl UserPermissions {
+    pub fn with_admin_read(mut self) -> Self {
+        self.admin_read = Permission::Granted;
+        self
+    }
+
+    pub fn with_admin_write(mut self) -> Self {
+        self.admin_write = Permission::Granted;
+        self
+    }
+
+    pub fn with_admin_delete(mut self) -> Self {
+        self.admin_delete = Permission::Granted;
+        self
+    }
+
     pub fn with_buckets_read(mut self) -> Self {
         self.buckets_read = Permission::Granted;
         self
@@ -162,11 +192,13 @@ impl UserPermissions {
     pub fn with_users_read(mut self) -> Self {
         self.users_read = Permission::Granted;
         self
-    }    
+    }
+
     pub fn with_users_write(mut self) -> Self {
         self.users_write = Permission::Granted;
         self
     }
+
     pub fn with_users_delete(mut self) -> Self {
         self.users_delete = Permission::Granted;
         self
@@ -205,6 +237,9 @@ impl UserPermissions {
 impl Default for UserPermissions {
     fn default() -> Self {
         UserPermissions {
+            admin_read: Permission::None,
+            admin_write: Permission::None,
+            admin_delete: Permission::None,
             buckets_read: Permission::None,
             buckets_write: Permission::None,
             buckets_delete: Permission::None,
@@ -231,6 +266,9 @@ pub mod test {
     #[test]
     fn default_permissions_builder() {
         let rights = UserPermissions {
+            admin_read: Permission::None,
+            admin_write: Permission::None,
+            admin_delete: Permission::None,
             buckets_read: Permission::None,
             buckets_write: Permission::None,
             buckets_delete: Permission::None,
@@ -252,6 +290,9 @@ pub mod test {
     #[test]
     fn full_permissions_builder() {
         let rights = UserPermissions {
+            admin_read: Permission::Granted,
+            admin_write: Permission::Granted,
+            admin_delete: Permission::Granted,
             buckets_read: Permission::Granted,
             buckets_write: Permission::Granted,
             buckets_delete: Permission::Granted,
@@ -267,6 +308,9 @@ pub mod test {
         };
 
         let build_test = UserPermissions::default()
+            .with_admin_read()
+            .with_admin_write()
+            .with_admin_delete()
             .with_buckets_read()
             .with_buckets_write()
             .with_buckets_delete()
