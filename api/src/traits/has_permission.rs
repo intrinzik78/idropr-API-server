@@ -1,189 +1,171 @@
 // a fast and efficient way to determine whether a user has the appropriate permissions set to access an API endpoint
 use crate::{
-    enums::Permission,
+    enums::{Action,Permission,Scope,Resource},
     types::UserPermissions
 };
 
-// creates bit flags for each permission toggle
-const ADMIN_READ:u16        = 0b0000_0000_0000_0001;
-const ADMIN_WRITE:u16       = 0b0000_0000_0000_0010;
-const ADMIN_DELETE:u16      = 0b0000_0000_0000_0100;
+const BITS_PER_RESOURCE:u8 = 8;
+const ADMIN_OFFSET:u8 = 7;
 
-const BUCKETS_READ:u16      = 0b0000_0000_0000_1000;
-const BUCKETS_WRITE:u16     = 0b0000_0000_0001_0000;
-const BUCKETS_DELETE:u16    = 0b0000_0000_0010_0000;
-
-const IMAGES_READ:u16       = 0b0000_0000_0100_0000;
-const IMAGES_WRITE:u16      = 0b0000_0000_1000_0000;
-const IMAGES_DELETE:u16     = 0b0000_0001_0000_0000;
-
-const SESSIONS_READ:u16     = 0b0000_0010_0000_0000;
-const SESSIONS_WRITE:u16    = 0b0000_0100_0000_0000;
-const SESSIONS_DELETE:u16   = 0b0000_1000_0000_0000;
-
-const USERS_READ:u16        = 0b0001_0000_0000_0000;
-const USERS_WRITE:u16       = 0b0010_0000_0000_0000;
-const USERS_DELETE:u16      = 0b0100_0000_0000_0000;
-
-// single method called on a user's SoftwareAccess struct. 
-// Required rights are passed into the method where a comparison is made and Pass/Fail result returned.
 pub trait HasPermission {
-    fn has_permission(self, required_rights: &UserPermissions) -> Permission;
+    fn has_permission(&self, required_permissions: &UserPermissions) -> Permission;
+    fn to_mask(&self, resource: Resource, action: Action, scope: Scope) -> u128;
+    fn set_admin(&self, resource: Resource) -> u128;
 }
 
-impl HasPermission for &UserPermissions {
-    fn has_permission(self, required_rights: &UserPermissions) -> Permission {
-        let mut user_flags = 0_u16;
+impl HasPermission for UserPermissions {
+    
+    #[inline]
+    fn to_mask(&self, resource: Resource, action: Action, scope: Scope) -> u128 {
+        let block_offset = resource as u8 * BITS_PER_RESOURCE;
+        let bit_offset = match (action as u8, scope as u8) {
+            (0,0) => 0, // READ SELF
+            (0,1) => 1, // READ ANY
+            (1,0) => 2, // WRITE SELF
+            (1,1) => 3, // WRITE ANY
+            (2,0) => 4, // DELETE SELF
+            (2,1) => 5, // DELETE ANY
+            _     => 6, // RESERVED
+        };
 
-        if self.admin_read == Permission::Granted       { user_flags |= ADMIN_READ; }
-        if self.admin_write == Permission::Granted      { user_flags |= ADMIN_WRITE; }
-        if self.admin_delete == Permission::Granted     { user_flags |= ADMIN_DELETE; }
-        if self.buckets_read == Permission::Granted     { user_flags |= BUCKETS_READ; }
-        if self.buckets_write == Permission::Granted    { user_flags |= BUCKETS_WRITE; }
-        if self.buckets_delete == Permission::Granted   { user_flags |= BUCKETS_DELETE; }
-        if self.images_read == Permission::Granted      { user_flags |= IMAGES_READ; }
-        if self.images_write == Permission::Granted     { user_flags |= IMAGES_WRITE; }
-        if self.images_delete == Permission::Granted    { user_flags |= IMAGES_DELETE; }
-        if self.sessions_read == Permission::Granted    { user_flags |= SESSIONS_READ; }
-        if self.sessions_write == Permission::Granted   { user_flags |= SESSIONS_WRITE }
-        if self.sessions_delete == Permission::Granted  { user_flags |= SESSIONS_DELETE; }
-        if self.users_read == Permission::Granted       { user_flags |= USERS_READ; }
-        if self.users_write == Permission::Granted      { user_flags |= USERS_WRITE; }
-        if self.users_delete == Permission::Granted     { user_flags |= USERS_DELETE; }
 
-        let mut required_flags = 0_u16;
-        if required_rights.admin_read == Permission::Granted       { required_flags |= ADMIN_READ; }
-        if required_rights.admin_write == Permission::Granted      { required_flags |= ADMIN_WRITE; }
-        if required_rights.admin_delete == Permission::Granted     { required_flags |= ADMIN_DELETE; }
-        if required_rights.buckets_read == Permission::Granted     { required_flags |= BUCKETS_READ; }
-        if required_rights.buckets_write == Permission::Granted    { required_flags |= BUCKETS_WRITE; }
-        if required_rights.buckets_delete == Permission::Granted   { required_flags |= BUCKETS_DELETE; }
-        if required_rights.images_read == Permission::Granted      { required_flags |= IMAGES_READ; }
-        if required_rights.images_write == Permission::Granted     { required_flags |= IMAGES_WRITE; }
-        if required_rights.images_delete == Permission::Granted    { required_flags |= IMAGES_DELETE; }
-        if required_rights.sessions_read == Permission::Granted    { required_flags |= SESSIONS_READ; }
-        if required_rights.sessions_write == Permission::Granted   { required_flags |= SESSIONS_WRITE }
-        if required_rights.sessions_delete == Permission::Granted  { required_flags |= SESSIONS_DELETE; }
-        if required_rights.users_read == Permission::Granted       { required_flags |= USERS_READ; }
-        if required_rights.users_write == Permission::Granted      { required_flags |= USERS_WRITE; }
-        if required_rights.users_delete == Permission::Granted     { required_flags |= USERS_DELETE; }
+        let bit:u128 = 1_u128 << ((block_offset + bit_offset) as u32);
+        bit
+    }
 
-        // bitwise comparison
-        if required_flags & user_flags == required_flags {
-            Permission::Granted
-        } else {
-            Permission::None
+    #[inline]
+    fn has_permission(&self, required_permissions: &UserPermissions) -> Permission {
+        let compared_permissions = self.mask() & required_permissions.mask();
+
+        match compared_permissions == required_permissions.mask() {
+            true  => Permission::Granted,
+            false => Permission::Denied
         }
+    }
+
+    #[inline]
+    fn set_admin(&self, resource: Resource) -> u128 {
+        let admin_bit: u128 = 1_u128 << (((resource as u8 * BITS_PER_RESOURCE) + ADMIN_OFFSET) as u32);
+
+        admin_bit
     }
 }
 
 #[cfg(test)]
-pub mod test {
+mod tests { 
     use super::*;
+    use crate::enums::{Action as A, Scope as S, Resource as R, Permission as P};
+    use crate::traits::HasPermission;
+
+    // Helpers to compute expected indices/bits for assertions
+    const fn base(res: R) -> u8 { (res as u8) * BITS_PER_RESOURCE }
+    const fn idx(res: R, act: A, sc: S) -> u32 {
+        let off = match (act as u8, sc as u8) {
+            (0,0) => 0, // READ SELF
+            (0,1) => 1, // READ ANY
+            (1,0) => 2, // WRITE SELF
+            (1,1) => 3, // WRITE ANY
+            (2,0) => 4, // DELETE SELF
+            (2,1) => 5, // DELETE ANY
+            _     => 6, // RESERVED
+        };
+        (base(res) + off) as u32
+    }
+    const fn bit(res: R, act: A, sc: S) -> u128 {
+        1u128 << idx(res, act, sc)
+    }
+    const fn admin_bit(res: R) -> u128 {
+        1u128 << ((base(res) + ADMIN_OFFSET) as u32)
+    }
 
     #[test]
-    // tests bit-flag check for granting permissions
-    fn account_permissions() {
-        let mut test_permissions = 0b0_u16;
-        let full_permissions: u16 = 0b0111_1111_1111_1111;
-        test_permissions |= ADMIN_READ;
-        test_permissions |= ADMIN_WRITE;
-        test_permissions |= ADMIN_DELETE;
-        test_permissions |= BUCKETS_READ;
-        test_permissions |= BUCKETS_WRITE;
-        test_permissions |= BUCKETS_DELETE;
-        test_permissions |= IMAGES_READ;
-        test_permissions |= IMAGES_WRITE;
-        test_permissions |= IMAGES_DELETE;
-        test_permissions |= SESSIONS_READ;
-        test_permissions |= SESSIONS_WRITE;
-        test_permissions |= SESSIONS_DELETE;
-        test_permissions |= USERS_READ;
-        test_permissions |= USERS_WRITE;
-        test_permissions |= USERS_DELETE;
+    fn bit_positions_users() {
+        // Sanity: Users block starts at bit 16 (2 * 8)
+        assert_eq!(base(R::Users), 16);
 
-        assert_eq!(test_permissions,full_permissions);
+        let u = UserPermissions::new();
+        assert_eq!(u.to_mask(R::Users, A::Read,  S::Self_), bit(R::Users, A::Read,  S::Self_));
+        assert_eq!(u.to_mask(R::Users, A::Read,  S::Any ),  bit(R::Users, A::Read,  S::Any ));
+        assert_eq!(u.to_mask(R::Users, A::Write, S::Self_), bit(R::Users, A::Write, S::Self_));
+        assert_eq!(u.to_mask(R::Users, A::Write, S::Any ),  bit(R::Users, A::Write, S::Any ));
+        assert_eq!(u.to_mask(R::Users, A::Delete,S::Self_), bit(R::Users, A::Delete,S::Self_));
+        assert_eq!(u.to_mask(R::Users, A::Delete,S::Any ),  bit(R::Users, A::Delete,S::Any ));
+    }
 
-        // creates test users
-        let user_with_no_rights = UserPermissions::default();
-        let user_with_all_rights = UserPermissions::default()
-            .with_admin_read()
-            .with_admin_write()
-            .with_admin_delete()
-            .with_buckets_read()
-            .with_buckets_write()
-            .with_buckets_delete()
-            .with_images_read()
-            .with_images_write()
-            .with_images_delete()
-            .with_sessions_read()
-            .with_sessions_write()
-            .with_sessions_delete()
-            .with_users_read()
-            .with_users_write()
-            .with_users_delete();
+    #[test]
+    fn admin_bit_users() {
+        let u = UserPermissions::new();
+        let b = u.set_admin(R::Users);
+        assert_eq!(b, admin_bit(R::Users));
+        // shifting index is exactly base + ADMIN_OFFSET
+        assert_eq!(b, 1u128 << ((base(R::Users) + ADMIN_OFFSET) as u32));               
+    }
 
-        assert_eq!(user_with_no_rights.has_permission(&user_with_all_rights), Permission::None);
-        assert_eq!(user_with_no_rights.has_permission(&user_with_no_rights), Permission::Granted);
+    #[test]
+    fn builder_chaining_or_not_overwrite() {
+        // with_rw_self should set ReadSelf and WriteSelf
+        let p = UserPermissions::new().with_rw_self(R::Users);
+        let expected = bit(R::Users, A::Read, S::Self_) | bit(R::Users, A::Write, S::Self_);
+        assert_eq!(p.mask(), expected);
 
-        // full admin permissions
-        let admin_user = UserPermissions::default()
-            .with_admin_read()
-            .with_admin_write()
-            .with_admin_delete();
+        // Chaining should OR additional bits, not overwrite
+        let p2 = p.with_read_any(R::Users);
+        let expected2 = expected | bit(R::Users, A::Read, S::Any);
+        assert_eq!(p2.mask(), expected2);
+    }
+
+    #[test]
+    fn has_permission_single_and_multi() {
+        let held = UserPermissions::new()
+            .with_read_self(R::Users)
+            .with_write_self(R::Users);
+
+        // Single requirement granted
+        let req_read = UserPermissions::new().with_read_self(R::Users);
+        assert_eq!(held.has_permission(&req_read), P::Granted);
+
+        // Multi requirement granted (held has both)
+        let req_rw = UserPermissions::new().with_rw_self(R::Users);
+        assert_eq!(held.has_permission(&req_rw), P::Granted);
+
+        // Multi requirement denied (missing DeleteSelf)
+        let req_rwd = UserPermissions::new()
+            .with_read_self(R::Users)
+            .with_write_self(R::Users)
+            .with_delete_self(R::Users);
+        assert_eq!(held.has_permission(&req_rwd), P::Denied);
+    }
+
+    #[test]
+    fn scope_mismatch_denied() {
+        // Holder has ReadSelf on Users
+        let held = UserPermissions::new().with_read_self(R::Users);
+        // Endpoint requires ReadAny on Users
+        let req_any = UserPermissions::new().with_read_any(R::Users);
+        assert_eq!(held.has_permission(&req_any), P::Denied);
+    }
+
+    #[test]
+    fn admin_short_circuit_when_granted() {
+        // check admin bit is being set
+        let user = UserPermissions::default().with_admin(R::Users);
+        let admin_mask = admin_bit(R::Users);
         
-        assert_eq!(user_with_no_rights.has_permission(&admin_user), Permission::None);
-        assert_eq!(user_with_all_rights.has_permission(&admin_user), Permission::Granted);
+        assert_eq!(user.mask() & admin_mask, admin_mask);
 
-        // full buckets permissions
-        let buckets_user = UserPermissions::default()
-            .with_buckets_read()
-            .with_buckets_write()
-            .with_buckets_delete();
+        // check admin bit plays nicely when other bits are being set
+        let admin = user.with_read_self(R::Users);
+        let expected = admin_mask | bit(R::Users, A::Read, S::Self_);
         
-        assert_eq!(user_with_no_rights.has_permission(&buckets_user), Permission::None);
-        assert_eq!(user_with_all_rights.has_permission(&buckets_user), Permission::Granted);
+        assert_eq!(admin.mask(), expected);
+    }
 
-        // full images permissions
-        let images_user = UserPermissions::default()
-            .with_images_read()
-            .with_images_write()
-            .with_images_delete();
-        
-        assert_eq!(user_with_no_rights.has_permission(&images_user), Permission::None);
-        assert_eq!(user_with_all_rights.has_permission(&images_user), Permission::Granted);
-
-        // full sessions permissions
-        let sessions_user = UserPermissions::default()
-            .with_sessions_read()
-            .with_sessions_write()
-            .with_sessions_delete();
-        
-        assert_eq!(user_with_no_rights.has_permission(&sessions_user), Permission::None);
-        assert_eq!(user_with_all_rights.has_permission(&sessions_user), Permission::Granted);
-
-        // full users permissions
-        let users_user = UserPermissions::default()
-            .with_users_read()
-            .with_users_write()
-            .with_users_delete();
-        
-        assert_eq!(user_with_no_rights.has_permission(&users_user), Permission::None);
-        assert_eq!(user_with_all_rights.has_permission(&users_user), Permission::Granted);
-        
-        //fail case
-        assert_eq!(user_with_no_rights.has_permission(&admin_user), Permission::None);
-        assert_eq!(user_with_no_rights.has_permission(&buckets_user), Permission::None);
-        assert_eq!(user_with_no_rights.has_permission(&users_user), Permission::None);
-        assert_eq!(user_with_no_rights.has_permission(&images_user), Permission::None);
-        assert_eq!(user_with_no_rights.has_permission(&sessions_user), Permission::None);
-
-        //success case
-        assert_eq!(user_with_all_rights.has_permission(&admin_user), Permission::Granted);
-        assert_eq!(user_with_all_rights.has_permission(&buckets_user), Permission::Granted);
-        assert_eq!(user_with_all_rights.has_permission(&users_user), Permission::Granted);
-        assert_eq!(user_with_all_rights.has_permission(&images_user), Permission::Granted);
-        assert_eq!(user_with_all_rights.has_permission(&sessions_user), Permission::Granted);
-    
+    #[test]
+    fn bounds_do_not_overshift() {
+        // Highest defined resource in your enum is System=5 => base = 40
+        // Admin bit is base+7 = 47 (well under 128)
+        let highest_admin_idx = (base(R::System) + ADMIN_OFFSET) as u32;
+        assert!(highest_admin_idx < 128);
+        let _ = 1u128 << highest_admin_idx; // should not panic in debug
     }
 }

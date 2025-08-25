@@ -197,12 +197,12 @@ impl SessionController {
             // and retrieve sesssion
             let session = match locked_list.get(&key) {
                 Some(s) => s,
-                None => return Ok(Permission::None)
+                None => return Ok(Permission::Denied)
             };
 
             // check if it's expired and deny if it is
             if session.is_expired() == ExpiredStatus::Expired {
-                return Ok(Permission::None);
+                return Ok(Permission::Denied);
             }
 
             // constant time hash check
@@ -218,7 +218,7 @@ impl SessionController {
                         User::System(s) => s.permissions.has_permission(required_rights)
                     }
                 } else {
-                    Permission::None
+                    Permission::Denied
                 }
             };
 
@@ -251,7 +251,7 @@ impl Default for SessionController {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::users::SystemUser;
+    use crate::{enums::Resource, types::users::SystemUser};
 
     use super::*;
 
@@ -298,8 +298,9 @@ mod tests {
     fn hash_decode_check() {
         let sessions_to_create = 1_000_000;
         let controller = SessionController::new(sessions_to_create, 4);
-        let permissions = UserPermissions::default().with_sessions_full();
-        let denied_permissions = UserPermissions::default().with_buckets_full();
+        let r = Resource::Sessions;
+        let permissions = UserPermissions::default().with_rw_self(r);
+        let denied_permissions = UserPermissions::default().with_admin(r);
         let user = User::System(SystemUser{
             id: 0,
             username: String::from("username"),
@@ -322,7 +323,7 @@ mod tests {
 
             // permission check will decode and validate the token and deny access
             let check = controller.permission_check(&token, &denied_permissions).unwrap();
-            assert_eq!(check,Permission::None);
+            assert_eq!(check,Permission::Denied);
         }
     }
 

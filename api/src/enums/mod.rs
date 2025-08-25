@@ -24,7 +24,7 @@ pub use connection_status::ConnectionStatus;
 pub use error::Error;
 pub use expired_status::ExpiredStatus;
 pub use master_password::MasterPassword;
-pub use permission::Permission;
+pub use permission::{Action,Scope,Resource,Permission};
 pub use primary_command::PrimaryCommand;
 pub use rate_limit_status::RateLimiterStatus;
 pub use rows_updated::RowsUpdated;

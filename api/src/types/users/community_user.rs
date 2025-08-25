@@ -22,7 +22,7 @@ impl DatabaseHelper {
     /// consumes self and returns the BusinessUser
     async fn transform(self, database: &DatabaseConnection) -> Result<CommunityUser> {
         let status = self.user_status_id.to_user_account_status()?;
-        let permissions = UserPermissions::from_user_id(self.id, database).await?;
+        let permissions = UserPermissions::by_user_id(self.id, database).await?;
         
         let user = CommunityUser {
             id: self.id,

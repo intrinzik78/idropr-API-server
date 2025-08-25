@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// target for the middleware service
-#[derive(Debug)]
+#[derive(Clone,Debug)]
 pub struct RouteLock {
     required_permissions: UserPermissions
 }
@@ -41,7 +41,7 @@ where
     fn new_transform(&self, service: S) -> Self::Future {
         ok(RouteLockService {
             service: Rc::new(service),
-            required_permissions: Rc::new(self.required_permissions)
+            required_permissions: Rc::new(self.required_permissions.clone())
         })
     }
 }
@@ -63,7 +63,7 @@ impl<S> RouteLockService<S> {
 
         match session_controller.permission_check(token, required_permissions) {
             Ok(permission) => permission,
-            Err(_) => Permission::None
+            Err(_) => Permission::Denied
         }
     }
 }
@@ -91,13 +91,13 @@ where
             Ok(token) => {
                 req
                 .app_data()
-                .map_or(Permission::None, |shared: &Data<AppState>| RouteLockService::<S>::logic(shared, &token, required_permissions))
+                .map_or(Permission::Denied, |shared: &Data<AppState>| RouteLockService::<S>::logic(shared, &token, required_permissions))
             },
-            Err(_) => Permission::None
+            Err(_) => Permission::Denied
         };
 
         // return early with a Forbidden response
-        if permission_status == Permission::None {
+        if permission_status == Permission::Denied {
             // map fail into BoxBody
             let res = req
                 .into_response(HttpResponse::Unauthorized()

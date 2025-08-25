@@ -1,3 +1,4 @@
+mod u128_bits;
 mod has_permission;
 mod to_auth_token;
 mod to_authorization_status;
@@ -14,6 +15,7 @@ mod to_user_account_status;
 mod to_verification_status;
 mod verify_password;
 
+pub use u128_bits::U128Bits;
 pub use has_permission::HasPermission;
 pub use to_auth_token::ToHeaderAuthToken;
 pub use to_authorization_status::ToAuthorizationStatus;
