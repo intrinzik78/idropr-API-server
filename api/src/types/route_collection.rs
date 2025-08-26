@@ -2,7 +2,7 @@
 use actix_web::{web,Scope};
 
 use crate::{
-    api::{HealthCheck,sessions},
+    api::{HealthCheck,sessions,secrets},
     enums::Resource,
     services::RouteLock,
     types::UserPermissions
@@ -18,6 +18,7 @@ impl RouteCollection {
         Scope::new("/v1")
             .configure(RouteCollection::health)
             .configure(RouteCollection::sessions)
+            .configure(RouteCollection::secrets)
     }
 }
 
@@ -57,8 +58,7 @@ impl RouteCollection {
 
     /// secrets resource and endpoings
     pub fn secrets(cfg: &mut web::ServiceConfig) {
-        let r = Resource::Secrets;
-        let p = UserPermissions::default().with_rw_any(r).with_admin(r);
-        cfg.route("/secrets", web::delete().to(sessions::SessionsDelete::logic).wrap(RouteLock::default(p)));
+        let p = UserPermissions::from_role(crate::enums::Role::SysAdmin);
+        cfg.route("/secrets", web::post().to(secrets::SecretsPost::logic).wrap(RouteLock::default(p)));
     }
 }

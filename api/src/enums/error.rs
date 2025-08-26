@@ -41,17 +41,24 @@ pub enum Error {
     /// Utf8 errors are generated during decryption when Vec<u8> is converted to plain text
     #[from]
     FromUtf8Error(FromUtf8Error),
+
+    ApiPasswordOutOfBounds,             // api secret passwords must be: [0 < password < 32]
+    CannotDecryptEmptyDataSet,          // attempted decryption on an empty data set
+    CouldNotVerifyEncryptionSuccess,
     DatabaseConnection(String),         // failed database connection with the message passed back by the database itself
     DatabaseConnectionTestFailed,       // generated during a test of a new database connection
     MalformedAuthorizationToken,        // authorization token did not 
+    MasterPasswordNotProvided,          // secrets controller requires master password
     MissingAuthorizationBearerInHeader, // authorization bearer was not present during an authorization check
     PemCertFileReadSizeMismatch,        // generated when the buffer size does not match the size returned from the file read
+    PoisonedApiSecretsList,             // api secrets rwlock could not be locked for reading / writing
     PoisonedSessionList,                // session shard could not be locked
     ZeroLengthUUIDFound,                // uuids cannot be zero length, zero length found
     ServerCrash(String),                // generated if the HttpServer itself were to crash
     ServerModeOutOfRange,               // generated when the ToServerMode cannot match a database server mode value
     SessionTokenLengthTooLong,          // client has provided a session token longer than required
     SessionTokenLengthTooShort,         // client has provided a session token shorter than required
+    SliceNotCopied,                     // could not verify copy_from_slice was successful
     SystemSettingsNotSet,               // generated on startup when attempting to change a system while it's set to None
     SystemSettingsRecordNotReturned,    // a system settings record was not available in the database
     SystemFlagOutOfRange,               // generated when the ToSystemFlag trait cannot match a database system flag value 

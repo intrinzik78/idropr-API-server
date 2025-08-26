@@ -13,6 +13,8 @@ mod route_collection;
 mod session;
 mod session_controller;
 mod key_set;
+mod secret;
+mod secret_controller;
 mod settings;
 mod user_permissions;
 
@@ -33,5 +35,7 @@ pub use route_collection::RouteCollection;
 pub use session::Session;
 pub use session_controller::SessionController;
 pub use key_set::KeySet;
+pub use secret::{DecryptedSecret,EncryptedSecret};
+pub use secret_controller::SecretController;
 pub use settings::Settings;
 pub use user_permissions::UserPermissions;
