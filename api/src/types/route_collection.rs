@@ -2,10 +2,8 @@
 use actix_web::{web,Scope};
 
 use crate::{
-    api::{
-        HealthCheck,
-        sessions
-    },
+    api::{HealthCheck,sessions},
+    enums::Resource,
     services::RouteLock,
     types::UserPermissions
 };
@@ -33,10 +31,13 @@ impl RouteCollection {
 
     /// sessions resource and endpoints
     pub fn sessions(cfg: &mut web::ServiceConfig) {
+        let r = Resource::Sessions;
+
+        // public endpoint
         cfg.route("/sessions", web::post().to(sessions::SessionsPost::logic));
         
-        let permissions = UserPermissions::default().with_sessions_delete();
-        cfg.route("/sessions", web::delete().to(sessions::SessionsDelete::logic).wrap(RouteLock::default(permissions)));
+        let p = UserPermissions::default().with_delete_self(r);
+        cfg.route("/sessions", web::delete().to(sessions::SessionsDelete::logic).wrap(RouteLock::default(p)));
     }
     
     /// users resource and endpoints
@@ -52,5 +53,12 @@ impl RouteCollection {
     /// images resource and endpoints
     pub fn images(_cfg: &mut web::ServiceConfig) {
         todo!()
+    }
+
+    /// secrets resource and endpoings
+    pub fn secrets(cfg: &mut web::ServiceConfig) {
+        let r = Resource::Secrets;
+        let p = UserPermissions::default().with_rw_any(r).with_admin(r);
+        cfg.route("/secrets", web::delete().to(sessions::SessionsDelete::logic).wrap(RouteLock::default(p)));
     }
 }

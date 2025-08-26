@@ -15,6 +15,7 @@ mod user;
 mod user_type;
 mod uuid;
 mod refresh_status;
+mod role;
 mod session_controller_status;
 mod verification_status;
 
@@ -35,5 +36,6 @@ pub use uuid::Uuid;
 pub use user::User;
 pub use user_type::UserType;
 pub use refresh_status::RefreshStatus;
+pub use role::Role;
 pub use session_controller_status::SessionControllerStatus;
 pub use verification_status::VerificationStatus;
