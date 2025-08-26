@@ -75,7 +75,7 @@ impl UserPermissions {
     /// sets the admin bit for any resource. admin bit must be set explicitly.
     #[inline]
     fn grant_admin_bit(&mut self, bit: u128) {
-        self.mask = (self.mask | bit) as u128;
+        self.mask |= bit;
     }
 
     /// sets [read:self] on a resource
