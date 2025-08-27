@@ -1,17 +1,13 @@
 use std::rc::Rc;
 use actix_web::{
-    body::{EitherBody, BoxBody},
-    dev::{Service, ServiceRequest, ServiceResponse, Transform},
-    web::{Data},
-    HttpResponse,
-    Error
+    body::{BoxBody, EitherBody}, dev::{Service, ServiceRequest, ServiceResponse, Transform}, web::Data, Error, HttpMessage, HttpResponse
 };
 use futures::future::{ok, LocalBoxFuture, Ready};
 use std::task::{Context, Poll};
 
 use crate::{
     enums::{Permission,SessionControllerStatus},
-    types::{AppState, AuthorizationToken, UserPermissions}
+    types::{AppState, AuthorizationToken, NeedCheck, UserPermissions}
 };
 
 /// target for the middleware service
@@ -21,7 +17,8 @@ pub struct RouteLock {
 }
 
 impl RouteLock {
-    pub fn default(required_permissions: UserPermissions) -> RouteLock {
+    pub fn default(required_permissions: &UserPermissions) -> RouteLock {
+        let required_permissions = required_permissions.to_owned();
         RouteLock { required_permissions }
     }
 }
@@ -105,6 +102,9 @@ where
                 .map_into_right_body();
 
             return Box::pin(async move { Ok(res) });
+        } else {
+            let checked_permissions = NeedCheck(required_permissions.clone());
+            req.extensions_mut().insert(checked_permissions);
         }
 
         // return the result of the success branch
