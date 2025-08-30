@@ -3,7 +3,7 @@ use actix_web::{web,Scope};
 
 use crate::{
     api::{HealthCheck,sessions,secrets},
-    enums::Resource,
+    enums::Role,
     services::RouteLock,
     types::UserPermissions
 };
@@ -32,13 +32,13 @@ impl RouteCollection {
 
     /// sessions resource and endpoints
     pub fn sessions(cfg: &mut web::ServiceConfig) {
-        let r = Resource::Sessions;
+        let user = UserPermissions::from_role(Role::User);
 
-        // public endpoint
-        cfg.route("/sessions", web::post().to(sessions::SessionsPost::logic));
-        
-        let p = UserPermissions::default().with_delete_self(r);
-        cfg.route("/sessions", web::delete().to(sessions::SessionsDelete::logic).wrap(RouteLock::default(p)));
+        cfg.service(
+            actix_web::web::scope("/sessions")
+                .route("", web::post().to(sessions::SessionsPost::logic))
+                .route("", web::delete().to(sessions::SessionsDelete::logic).wrap(RouteLock::default(&user)))
+        );
     }
     
     /// users resource and endpoints
@@ -58,7 +58,16 @@ impl RouteCollection {
 
     /// secrets resource and endpoings
     pub fn secrets(cfg: &mut web::ServiceConfig) {
-        let p = UserPermissions::from_role(crate::enums::Role::SysAdmin);
-        cfg.route("/secrets", web::post().to(secrets::SecretsPost::logic).wrap(RouteLock::default(p)));
+        let sysadmin = UserPermissions::from_role(Role::SysAdmin);
+
+        cfg.service(
+            actix_web::web::scope("/secrets")
+                .wrap(RouteLock::default(&sysadmin))
+                .route("", actix_web::web::post().to(secrets::SecretsPost::logic))
+                .route("/{id}", actix_web::web::get().to(secrets::SecretsGet::logic))
+                .route("/{id}", actix_web::web::put().to(secrets::SecretsPut::logic))
+                .route("/{id}", actix_web::web::patch().to(secrets::SecretsPatch::logic))
+                .route("/{id}", actix_web::web::delete().to(secrets::SecretsDelete::logic))
+        );
     }
 }

@@ -24,6 +24,7 @@ pub enum User {
     System(SystemUser),         // 2
 }
 
+// async
 impl User {
 
     /// builds a business user
@@ -97,6 +98,17 @@ impl User {
             Self::parse_user_type(&record,database).await
         } else {
             Ok(None)
+        }
+    }
+}
+
+// sync
+impl User {
+    pub fn user_id(&self) -> i64 {
+        match self {
+            User::Business(b)   => b.id,
+            User::Community(c) => c.id,
+            User::System(s)       => s.id
         }
     }
 }

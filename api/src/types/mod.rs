@@ -34,7 +34,7 @@ pub use header_settings::HeaderSettings;
 pub use permission_check::PermissionCheck;
 pub use rate_limit_sweeper::RateLimitSweeper;
 pub use route_collection::RouteCollection;
-pub use session::Session;
+pub use session::{DatabaseSession,Session};
 pub use session_controller::SessionController;
 pub use key_set::KeySet;
 pub use secret::{DecryptedSecret,EncryptedSecret};

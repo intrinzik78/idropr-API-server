@@ -1,9 +1,10 @@
 use std::{collections::HashMap, hash::{DefaultHasher,Hash,Hasher}, sync::RwLock, time::{Duration,Instant}};
+use rand::prelude::*;
 
 use crate::{
-    enums::{Error, ExpiredStatus, Permission, RefreshStatus, User, VerificationStatus},
+    enums::{AuthContext, Error, ExpiredStatus, Permission, RefreshStatus, User, Uuid, VerificationStatus},
     traits::{FromBase64, HasPermission, ToBase64, ToKeySet},
-    types::{KeySet, PermissionCheck, Session, UserPermissions}
+    types::{DatabaseConnection, DatabaseSession, KeySet, PermissionCheck, Session, UserPermissions}
 };
 
 type Result<T> = std::result::Result<T,Error>;
@@ -60,10 +61,15 @@ impl GarbageCollector {
 #[derive(Debug)]
 pub struct SessionController {
     list: Vec<RwLock<HashMap<[u8;16],Session>>>,
-    garbage_collector: RwLock<GarbageCollector>
+    garbage_collector: RwLock<GarbageCollector>,
+    hash_key: Uuid
 }
 
 impl SessionController {
+
+    pub fn hash_key(&self) -> &Uuid {
+        &self.hash_key
+    }
 
     /// garbage collector interval
     pub async fn watch(&self) {
@@ -78,6 +84,7 @@ impl SessionController {
 
     /// runs a garbage collection sweep to remove expired sessions
     pub fn start_collector(&self) -> Result<()> {
+
         // begin write lock
         let mut locked_collector = self.garbage_collector.write().map_err(|_e| Error::PoisonedSessionList)?;
 
@@ -112,8 +119,10 @@ impl SessionController {
 
     /// returns a new session controller
     pub fn new(capacity: usize, threads: usize) -> Self {
+        let hash_key = Uuid::crypto32()
+            .expect("could not create session hash key on startup");
         let garbage_collector = GarbageCollector;
-
+        
         // double check threads > 0
         let threads_checked = {
             match threads {
@@ -134,7 +143,8 @@ impl SessionController {
 
         Self {
             garbage_collector: RwLock::new(garbage_collector),
-            list
+            list,
+            hash_key
         }
     }
 
@@ -177,18 +187,61 @@ impl SessionController {
         &self.list
     }
 
+    /// refresh a token from the database
+    pub async fn refresh(&self, user_id: i64, token_b64: &str, database: &DatabaseConnection) -> Result<Permission> {
+        let db_session = DatabaseSession::by_user_id(user_id, database).await?;
+        let verification_status = db_session.verify(self.hash_key.clone(),token_b64).await?;
+
+        // short circuit on verification failure
+        if verification_status == VerificationStatus::Unverified {
+            match self.delete(token_b64) {
+                Ok(_) => return Ok(Permission::Denied),
+                Err(_e) => {
+                    // add log here
+                    return Ok(Permission::Denied)
+                }
+            }
+        }
+
+        // decode from base64 to Vec<u8> and extract segments
+        let token = token_b64.vec_from_base64_url()?;
+        let key = token.to_key()?;
+        let idx = self.idx(&key)?;
+        
+        // begin locked write scope
+        {
+            let mut locked_list = self.list[idx].write().map_err(|_e| Error::PoisonedSessionList)?;
+            
+            if let Some(session) = locked_list.get_mut(&key) {
+                session.update_next_refresh();
+            } else {
+                return Err(Error::SessionNotFoundDuringRefresh);
+            }
+        }
+        // end locked write scope
+
+        Ok(Permission::Granted)
+    }
+
     /// verify user has software access rights / permissions
-    pub fn permission_check(&self, token_b64: &str, required_rights: &UserPermissions) -> Result<Permission> {
+    pub fn permission_check(&self, token_b64: &str, required_rights: UserPermissions) -> Result<PermissionCheck> {
         // decode from base64 to Vec<u8> and extract segments
         let token = token_b64.vec_from_base64_url()?;
         let key = token.to_key()?;
         let secret = token.to_secret()?;
 
+        // default: deny all
+        let mut permission_check = PermissionCheck {
+            permission: Permission::Denied,
+            refresh_status: RefreshStatus::None,
+            auth_context: AuthContext::None
+        };
+                        
         // derive shard id
         let idx = self.idx(&key)?;
         
         // begin read lock scope
-        let permission_check = {
+        {
             // get read lock
             let locked_list = self.list[idx]
                 .read()  
@@ -197,46 +250,38 @@ impl SessionController {
             // and retrieve sesssion
             let session = match locked_list.get(&key) {
                 Some(s) => s,
-                None => return Ok(Permission::Denied)
+                None => return Ok(permission_check)
             };
-
+            
             // check if it's expired and deny if it is
             if session.is_expired() == ExpiredStatus::Expired {
-                return Ok(Permission::Denied);
+                return Ok(permission_check);
             }
+
+            // set refresh status flag
+            permission_check.refresh_status = session.is_stale();
 
             // constant time hash check
             let verify_status = KeySet::verify(&key,&secret,&session.hash);
 
-            // permission check
-            let permission = {
-                 if verify_status == VerificationStatus::Verified {
-                    // run permission checks
-                    match &session.user {
-                        User::Business(u) => u.permissions.has_permission(required_rights),
-                        User::Community(c) => c.permissions.has_permission(required_rights),
-                        User::System(s) => s.permissions.has_permission(required_rights)
-                    }
-                } else {
-                    Permission::Denied
+            // authorization check
+            if verify_status == VerificationStatus::Verified {
+                permission_check.permission = match &session.user {
+                    User::Business(u) => u.permissions.has_permission(&required_rights),
+                    User::Community(c) => c.permissions.has_permission(&required_rights),
+                    User::System(s) => s.permissions.has_permission(&required_rights)
+                };
+
+                // set auth context on permissions granted
+                if permission_check.permission == Permission::Granted {
+                    let user = Box::new(session.user.clone());
+                    permission_check.auth_context = AuthContext::Some(user)
                 }
-            };
-
-            // package a response
-            PermissionCheck {
-                permission,
-                refresh_status: session.is_stale()
-            }
-        };
-        // end read lock scope
-
-        match permission_check.refresh_status {
-            RefreshStatus::None => Ok(permission_check.permission),
-            RefreshStatus::Refresh => {
-                // do a database check here
-                Ok(permission_check.permission)
             }
         }
+        // end read lock scope
+
+        Ok(permission_check)
     }
 }
 
@@ -265,6 +310,7 @@ mod tests {
             let key_set = KeySet::new().unwrap();
             let user = User::System(SystemUser{
                 id: 0,
+                epoch: 0,
                 username: String::from("username"),
                 hash: String::from("hash"),
                 status: crate::enums::UserAccountStatus::Enabled,
@@ -303,6 +349,7 @@ mod tests {
         let denied_permissions = UserPermissions::default().with_admin(r);
         let user = User::System(SystemUser{
             id: 0,
+            epoch: 0,
             username: String::from("username"),
             hash: String::from("hash"),
             status: crate::enums::UserAccountStatus::Enabled,
@@ -318,12 +365,12 @@ mod tests {
             let token = controller.insert(session, &key_set).unwrap();
 
             // permission check will decode and validate the token and allow access 
-            let check = controller.permission_check(&token, &permissions).unwrap();
-            assert_eq!(check,Permission::Granted);
+            let check = controller.permission_check(&token, permissions.clone()).unwrap();
+            assert_eq!(check.permission,Permission::Granted);
 
             // permission check will decode and validate the token and deny access
-            let check = controller.permission_check(&token, &denied_permissions).unwrap();
-            assert_eq!(check,Permission::Denied);
+            let check = controller.permission_check(&token, denied_permissions.clone()).unwrap();
+            assert_eq!(check.permission,Permission::Denied);
         }
     }
 
@@ -335,6 +382,7 @@ mod tests {
         let key_set = KeySet::new().unwrap();
         let user = User::System(SystemUser{
             id: 0,
+            epoch: 0_u64,
             username: String::from("username"),
             hash: String::from("hash"),
             status: crate::enums::UserAccountStatus::Enabled,
@@ -354,6 +402,7 @@ mod tests {
             let key_set = KeySet::new().unwrap();
             let user = User::System(SystemUser{
                 id: 0,
+                epoch: 0_u64,
                 username: String::from("username"),
                 hash: String::from("hash"),
                 status: crate::enums::UserAccountStatus::Enabled,
@@ -361,23 +410,25 @@ mod tests {
             });
 
             let mut session = Session::new(&key_set,user);
-            session.next_refresh = Instant::now().checked_sub(Duration::from_secs(186400)).unwrap();
+            session.next_refresh = Instant::now().checked_sub(Duration::from_secs(60 * 60 * 24 * 10)).unwrap();
+
+            assert_eq!(session.is_expired(),ExpiredStatus::Expired);
 
             let _token = controller.insert(session, &key_set).unwrap();
         }
 
         let _a = match controller.start_collector() {
             Ok(_) => println!("ok"),
-            Err(e) => println!("{:?}",e)
+            Err(e) => println!("FAIL {:?}",e)
         };
 
-        let mut count = 0;
+        let mut count: usize = 0;
 
         for idx in 0..controller.list.len() {
             let locked_list = controller.list[idx].read().unwrap();
             count += locked_list.len();
         }
 
-        assert!(count <= (sessions_to_create - (4*2048)), "Total sessions: {}", count);
+        assert!(count <= sessions_to_create - (4 * 2048));
     }
-}
+} 

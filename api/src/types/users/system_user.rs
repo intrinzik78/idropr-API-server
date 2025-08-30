@@ -12,6 +12,7 @@ type Result<T> = std::result::Result<T,Error>;
 #[derive(Debug,FromRow)]
 struct DatabaseHelper {
     id: i64,
+    epoch:u64,
     username: String,
     hash: String,
     user_status_id: i8,
@@ -27,6 +28,7 @@ impl DatabaseHelper {
         
         let user = SystemUser {
             id: self.id,
+            epoch: self.epoch,
             username: self.username,
             hash: self.hash,
             status,
@@ -40,6 +42,7 @@ impl DatabaseHelper {
 #[derive(Clone,Debug,PartialEq)]
 pub struct SystemUser {
     pub id: i64,
+    pub epoch: u64,
     pub username: String,
     pub hash: String,
     pub status: UserAccountStatus,
@@ -50,7 +53,7 @@ pub struct SystemUser {
 impl SystemUser {
     /// builds a business user from a database record by user_id
     pub async fn by_id(user_id: i64, database: &DatabaseConnection) -> Result<Option<SystemUser>> {
-        let sql = "SELECT user.id,username.username,user.hash,user.user_status_id,user_type_id FROM `user` JOIN `system_users` ON user.id = system_users.user_id JOIN `username` ON user.id = username.user_id WHERE user.id = ?";
+        let sql = "SELECT user.id,user.epoch,username.username,user.hash,user.user_status_id,user_type_id FROM `user` JOIN `system_users` ON user.id = system_users.user_id JOIN `username` ON user.id = username.user_id WHERE user.id = ?";
         let helper_opt:Option<DatabaseHelper> = sqlx::query_as(sql)
             .bind(user_id)
             .fetch_optional(&database.pool)

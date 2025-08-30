@@ -1,13 +1,12 @@
 use actix_web::{dev::Payload, error::{ErrorForbidden}, Error, FromRequest, HttpMessage, HttpRequest};
 use futures::future::ready;
 
-use std::rc::Rc;
 use crate::types::UserPermissions;
 
 #[derive(Clone,Debug)]
-pub struct NeedCheck(pub Rc<UserPermissions>);
+pub struct NeedCheck(pub UserPermissions);
 
-pub struct WereChecked(pub Rc<UserPermissions>);
+pub struct WereChecked(pub UserPermissions);
 
 impl FromRequest for WereChecked {
     type Error = Error;

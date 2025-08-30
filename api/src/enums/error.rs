@@ -43,6 +43,7 @@ pub enum Error {
     FromUtf8Error(FromUtf8Error),
 
     ApiPasswordOutOfBounds,             // api secret passwords must be: [0 < password < 32]
+    ApiSecretsOutOfSyncWithDatabase,
     CannotDecryptEmptyDataSet,          // attempted decryption on an empty data set
     CouldNotVerifyEncryptionSuccess,
     DatabaseConnection(String),         // failed database connection with the message passed back by the database itself
@@ -56,8 +57,12 @@ pub enum Error {
     ZeroLengthUUIDFound,                // uuids cannot be zero length, zero length found
     ServerCrash(String),                // generated if the HttpServer itself were to crash
     ServerModeOutOfRange,               // generated when the ToServerMode cannot match a database server mode value
+    SessionHashNotVerified,             // could not verify the bcrypt hash with the user's token
+    SessionNotFoundDuringRefresh,       // generated when a token was marked stale, but then couldn't be retreived from the session map
+    SessionNotFoundInDatabase,          // could not find a linked session in the database during a refresh
     SessionTokenLengthTooLong,          // client has provided a session token longer than required
     SessionTokenLengthTooShort,         // client has provided a session token shorter than required
+    SessionTokenIncorrectType,          // UUID::Crypto is the correct type to pass to the session token hasher
     SliceNotCopied,                     // could not verify copy_from_slice was successful
     SystemSettingsNotSet,               // generated on startup when attempting to change a system while it's set to None
     SystemSettingsRecordNotReturned,    // a system settings record was not available in the database

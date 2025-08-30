@@ -1,7 +1,7 @@
-#[derive(Copy,Clone,Debug,PartialEq)]
+#[derive(Clone,Debug,PartialEq)]
 pub enum Permission {
-    Denied,       // default deny
-    Granted,      // explicitly granted
+    Denied,         // default deny
+    Granted,  // explicitly granted
 }
 
 #[repr(u8)]

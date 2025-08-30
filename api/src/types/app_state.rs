@@ -112,10 +112,9 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::enums::{
-        ServerMode,
-        SystemFlag,
-        MasterPassword
+    use crate::{
+        enums::{ServerMode,SystemFlag,MasterPassword},
+        types::Env
     };
 
     /// constructor build test
@@ -128,7 +127,7 @@ mod tests {
         let env_vars = Env::default();
         let server_port = env_vars.server_port;
         let database = DatabaseConnection::new(&env_vars).await.expect("failed to build database connection in app state test");
-        let master_password = MasterPassword::Some(String::from("testing_password"));
+        let master_password = MasterPassword::Some(env.master_password);
 
         let settings = Settings {
             load_email_queue_service: SystemFlag::Disabled,
