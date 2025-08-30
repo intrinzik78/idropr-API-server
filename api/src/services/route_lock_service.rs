@@ -43,7 +43,7 @@ where
     fn new_transform(&self, service: S) -> Self::Future {
         ok(RouteLockService {
             service: Rc::new(service),
-            required_permissions: Rc::new(self.required_permissions.clone())
+            required_permissions: Rc::new(self.required_permissions)
         })
     }
 }

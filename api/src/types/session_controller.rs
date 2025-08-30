@@ -1,5 +1,4 @@
 use std::{collections::HashMap, hash::{DefaultHasher,Hash,Hasher}, sync::RwLock, time::{Duration,Instant}};
-use rand::prelude::*;
 
 use crate::{
     enums::{AuthContext, Error, ExpiredStatus, Permission, RefreshStatus, User, Uuid, VerificationStatus},
