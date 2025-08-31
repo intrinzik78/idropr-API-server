@@ -1,7 +1,7 @@
 // a fast and efficient way to determine whether a user has the appropriate permissions set to access an API endpoint
 use crate::{
     enums::{Action,Permission,Scope,Resource},
-    types::UserPermissions
+    types::permissions::UserPermissions
 };
 
 const BITS_PER_RESOURCE:u8 = 8;

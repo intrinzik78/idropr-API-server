@@ -6,8 +6,8 @@ use rate_limit::{
 };
 
 use crate::{
-    enums::{Error, RateLimiterStatus, SessionControllerStatus, SystemFlag},
-    types::{AppState,Env, SessionController}
+    enums::{Error, RateLimiterStatus, sessions::SessionControllerStatus, SystemFlag},
+    types::{AppState,Env, sessions::SessionController}
 };
 
 type Result<T> = std::result::Result<T,Error>;

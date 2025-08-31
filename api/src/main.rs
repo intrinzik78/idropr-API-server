@@ -11,7 +11,7 @@ use clap::Parser;
 // internal types
 use {
     enums::{Error,PrimaryCommand},
-    types::{ApiServer,Cli,Env,RateLimitSweeper,RouteCollection,SessionSweeper}
+    types::{ApiServer,Cli,Env,RateLimitSweeper,RouteCollection,sessions::SessionSweeper}
 };
 
 type Result<T> = std::result::Result<T,Error>;

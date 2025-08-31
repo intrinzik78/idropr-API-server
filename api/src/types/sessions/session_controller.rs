@@ -1,9 +1,9 @@
 use std::{collections::HashMap, hash::{DefaultHasher,Hash,Hasher}, sync::RwLock, time::{Duration,Instant}};
 
 use crate::{
-    enums::{AuthContext, Error, ExpiredStatus, Permission, RefreshStatus, User, Uuid, VerificationStatus},
+    enums::{AuthContext, Error, ExpiredStatus, Permission, sessions::RefreshStatus, User, Uuid, VerificationStatus},
     traits::{FromBase64, HasPermission, ToBase64, ToKeySet},
-    types::{DatabaseConnection, DatabaseSession, KeySet, PermissionCheck, Session, UserPermissions}
+    types::{DatabaseConnection, sessions::DatabaseSession, sessions::KeySet, sessions::Session, permissions::{PermissionCheck,UserPermissions}}
 };
 
 type Result<T> = std::result::Result<T,Error>;

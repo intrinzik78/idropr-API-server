@@ -6,9 +6,9 @@ use std::{time::{Duration, Instant}};
 use rand::random_range;
 
 use crate::{
-    enums::{Error, ExpiredStatus, RefreshStatus, RowsUpdated, User, VerificationStatus},
+    enums::{Error, ExpiredStatus, sessions::RefreshStatus, RowsUpdated, User, VerificationStatus},
     traits::{ToUpdatedResult, ToVerificationStatus},
-    types::{DatabaseConnection, KeySet}
+    types::{DatabaseConnection, sessions::KeySet}
 };
 
 type Result<T> = std::result::Result<T,Error>;

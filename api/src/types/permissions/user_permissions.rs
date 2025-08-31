@@ -248,7 +248,7 @@ impl UserPermissions {
 
 #[cfg(test)]
 mod tests {
-    use crate::{enums::{Permission,Resource}, types::UserPermissions};
+    use crate::{enums::{Permission,Resource}, types::permissions::UserPermissions};
 
     use super::*;
 

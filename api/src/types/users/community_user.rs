@@ -3,7 +3,7 @@ use sqlx::FromRow;
 use crate::{
     enums::{Error,UserAccountStatus},
     traits::{ToUserAccountStatus},
-    types::{DatabaseConnection, UserPermissions}
+    types::{DatabaseConnection, permissions::UserPermissions}
 };
 
 type Result<T> = std::result::Result<T,Error>;

@@ -69,25 +69,19 @@ impl EncryptedSecret {
     /// private decryption algo which decrypts on a spawned blocking thread
     pub async fn decrypt(&self, master_password: MasterPassword) -> Result<DecryptedSecret> {
         let password = match &master_password {
-            MasterPassword::Some(password) => password.clone(),
+            MasterPassword::Some(password) => password,
             MasterPassword::None => return Err(Error::MasterPasswordNotProvided)
         };
         
-        let encrypted_key = {
-            if let Some(key) = &self.api_key {
-                key.to_owned()
-            } else {
-                Vec::with_capacity(0)
-            }
-        };
+        // extract key or create empty vec
+        let encrypted_key: Vec<u8> = self.api_secret
+            .clone()
+            .map_or(Vec::with_capacity(0), |s| s.to_owned());
 
-        let encrypted_secret = {
-            if let Some(secret) = &self.api_secret {
-                secret.to_owned()
-            } else {
-                Vec::with_capacity(0)
-            }
-        };
+        // extract key or create empty vec
+        let encrypted_secret: Vec<u8> = self.api_key
+            .clone()
+            .map_or(Vec::with_capacity(0), |s| s.to_owned());
 
         // build cipher
         let cipher = {

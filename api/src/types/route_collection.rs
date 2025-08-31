@@ -5,7 +5,7 @@ use crate::{
     api::{HealthCheck,sessions,secrets},
     enums::Role,
     services::RouteLock,
-    types::UserPermissions
+    types::permissions::UserPermissions
 };
 
 #[derive(Clone,Debug)]

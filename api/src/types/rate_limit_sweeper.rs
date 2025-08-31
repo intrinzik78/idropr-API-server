@@ -5,6 +5,7 @@ use crate::{
     types::AppState
 };
 
+#[derive(Debug)]
 pub struct RateLimitSweeper;
 
 impl RateLimitSweeper {

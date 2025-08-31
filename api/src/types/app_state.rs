@@ -3,10 +3,10 @@ use crate::{
         ConnectionStatus,
         Error,
         RateLimiterStatus,
-        SessionControllerStatus
+        sessions::SessionControllerStatus
     },
     types::{
-        DatabaseConnection, Env, SecretController, Settings
+        DatabaseConnection, Env, secrets::SecretController, Settings
     }
 };
 

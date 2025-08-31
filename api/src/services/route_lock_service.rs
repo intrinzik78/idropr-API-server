@@ -11,8 +11,8 @@ use futures::future::{ok, LocalBoxFuture, Ready};
 use std::task::{Context, Poll};
 
 use crate::{
-    enums::{AuthContext, Permission, RefreshStatus, SessionControllerStatus},
-    types::{AppState, AuthorizationToken, NeedCheck, PermissionCheck, UserPermissions}
+    enums::{AuthContext, Permission, sessions::{RefreshStatus,SessionControllerStatus}},
+    types::{AppState, AuthorizationToken, permissions::{NeedCheck, PermissionCheck, UserPermissions}}
 };
 
 /// target for the middleware service
