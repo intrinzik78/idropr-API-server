@@ -207,8 +207,9 @@ impl UserPermissions {
     }
 
     /// tbd
+    #[allow(dead_code)]
     fn editor() -> UserPermissions {
-        UserPermissions::default()
+        todo!()
     }
 
     /// base user account
@@ -238,7 +239,7 @@ impl UserPermissions {
         match role {
             Role::SysAdmin => Self::sysadmin(),
             Role::SysMod => Self::sysmod(),
-            Role::Editor => Self::editor(),
+            Role::Editor => todo!(),
             Role::User => Self::user()
         }
     }

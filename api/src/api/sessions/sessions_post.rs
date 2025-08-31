@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     enums::{AuthorizationStatus, Error, SessionControllerStatus, User, Uuid},
-     traits::{ToBase64,VerifyPassword},
+     traits::VerifyPassword,
      types::{ApiResponse, AppState, DatabaseConnection, DatabaseSession, KeySet, Session}
 };
 
@@ -39,13 +39,14 @@ impl SessionsPost {
     }
 
     /// blake 3 keyed hash for storage in database
-    async fn hash_token(token: &str, uuid: Uuid) -> Result<String> {
+    #[inline]
+    async fn hash_token(token: &str, uuid: Uuid) -> Result<blake3::Hash> {
         let uuid = match uuid {
             Uuid::Crypto(buf) => buf,
             _ => return Err(Error::SessionTokenIncorrectType)
         };
         
-        let hash = blake3::keyed_hash(&uuid, token.as_bytes()).as_bytes().to_base64_url();
+        let hash = blake3::keyed_hash(&uuid, token.as_bytes());
         
         Ok(hash)
     }
@@ -73,7 +74,7 @@ impl SessionsPost {
         };
 
         // verify password against hash from database
-        if user.verify_password(&post.password) == AuthorizationStatus::Unauthorized {
+        if user.verify_password(&post.password).await == AuthorizationStatus::Unauthorized {
             return ApiResponse::unauthorized().ok();
         }
 
@@ -107,15 +108,6 @@ impl SessionsPost {
             }
         };
 
-        // instantiate transaction
-        let mut tx = match database.pool.begin().await {
-            Ok(t) => t,
-            Err(_e) => {
-                // log here
-                return ApiResponse::unauthorized().ok();
-            } 
-        };
-
         // hash the token for insertion into the database
         let uuid = session_controller.hash_key().to_owned();
         let hash = match Self::hash_token(&token,uuid).await {
@@ -127,25 +119,11 @@ impl SessionsPost {
         };
 
         // create db session ref
-        let _ = match DatabaseSession::into_db(user_id, &hash, &mut tx).await {
+        let () = match DatabaseSession::into_db(user_id, &hash, database).await {
             Ok(_insert_id) => (),
             Err(_e) => {
                 // log here
                 return ApiResponse::unauthorized().ok();
-            }
-        };
-
-        //commit transaction
-        let () = match tx.commit().await {
-            Ok(_) => {},
-            Err(_e) => {
-                // log here
-                match session_controller.delete(&token) {
-                    _ => {
-                        // log again here
-                        return ApiResponse::unauthorized().ok()
-                    }
-                }
             }
         };
 

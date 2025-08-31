@@ -70,17 +70,11 @@ impl<S> RouteLockService<S> {
         };
 
         if permissions_check.refresh_status == RefreshStatus::Refresh {
-            // extract user container
-            let user_id = match &permissions_check.auth_context {
-                AuthContext::Some(boxed_user) => boxed_user.user_id(),
-                AuthContext::None => return failed_check
-            };
-
             // extract database from shared data
             let database = shared.database();
 
             // retrieve session from database
-            permissions_check.permission = match session_controller.refresh(user_id, token, database).await {
+            permissions_check.permission = match session_controller.refresh(token, database).await {
                 Ok(permission) => permission,
                 Err(_e) => return failed_check
             };

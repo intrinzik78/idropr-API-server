@@ -1,3 +1,4 @@
+use actix_web::http::header::ToStrError;
 use derive_more::derive::From;
 use std::{
     fmt::Display,
@@ -37,6 +38,11 @@ pub enum Error {
     /// derived from `aes_gcm::Error` for encryption errors
     #[from]
     StdError(String),
+
+    /// derived from `aes_gcm::Error` for encryption errors
+    #[from]
+    ToStrError(ToStrError),
+
 
     /// Utf8 errors are generated during decryption when Vec<u8> is converted to plain text
     #[from]

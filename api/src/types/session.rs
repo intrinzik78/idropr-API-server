@@ -1,13 +1,13 @@
 use blake3::Hash;
 use blake3;
 use chrono::{DateTime,Utc};
-use sqlx::{prelude::FromRow, MySql, Transaction};
-use std::time::{Duration, Instant};
+use sqlx::{prelude::FromRow};
+use std::{time::{Duration, Instant}};
 use rand::random_range;
 
 use crate::{
-    enums::{Error, ExpiredStatus, RefreshStatus, User, Uuid, VerificationStatus},
-    traits::{ToBase64, ToVerificationStatus},
+    enums::{Error, ExpiredStatus, RefreshStatus, RowsUpdated, User, VerificationStatus},
+    traits::{ToUpdatedResult, ToVerificationStatus},
     types::{DatabaseConnection, KeySet}
 };
 
@@ -25,17 +25,12 @@ pub struct Session {
 
 #[derive(Clone,Debug,FromRow)]
 pub struct DatabaseSession {
-    id: i64,
     user_id: i64,
-    hash: String,
+    hash: Vec<u8>,
     timestamp: DateTime<Utc>
 }
 
 impl DatabaseSession {
-
-    pub fn id(&self) -> i64 {
-        self.id
-    }
 
     pub fn user_id(&self) -> i64 {
         self.user_id
@@ -45,48 +40,37 @@ impl DatabaseSession {
         &self.timestamp
     }
 
+    pub fn hash(&self) -> &[u8] {
+        &self.hash
+    }
+
     /// insert session into database as transaction
-    pub async fn into_db(user_id: i64, hash: &str, tx: &mut Transaction<'_,MySql>) -> Result<i64> {
+    pub async fn into_db(user_id: i64, hash: &blake3::Hash, database: &DatabaseConnection) -> Result<RowsUpdated> {
+        let slice = hash.as_bytes().as_slice();
         let sql = "INSERT INTO `session` (user_id,hash) VALUES (?,?) ON DUPLICATE KEY UPDATE hash = ?";
-        let insert_id = sqlx::query(sql)
+        let rows_updated = sqlx::query(sql)
             .bind(user_id)
-            .bind(hash)
-            .bind(hash)
-            .execute(&mut **tx)
+            .bind(slice)
+            .bind(slice)
+            .execute(&database.pool)
             .await?
-            .last_insert_id() as i64;
+            .rows_affected()
+            .to_updated_result();
 
-        Ok(insert_id)
+        Ok(rows_updated)
     }
 
-    /// check and refresh the database if a valid entry exists
-    pub async fn by_user_id(user_id: i64, database: &DatabaseConnection) -> Result<DatabaseSession> {
-        let sql = "SELECT id,user_id,hash,timestamp FROM `session` WHERE session.user_id = ?";
-        let session_opt:Option<DatabaseSession> = sqlx::query_as(sql)
-            .bind(user_id)
-            .fetch_optional(&database.pool)
-            .await?;
+    pub async fn verify(keyed_hash:&blake3::Hash, database: &DatabaseConnection) -> Result<VerificationStatus> {
+        let slice = keyed_hash.as_bytes().as_slice();
+        let sql = "UPDATE `session` SET timestamp=CURRENT_TIMESTAMP WHERE session.hash = ?";
+        let result = sqlx::query(sql)
+            .bind(slice)
+            .execute(&database.pool)
+            .await?
+            .rows_affected()
+            .to_updated_result();
 
-        if let Some(session) = session_opt {
-            Ok(session)
-        } else {
-            Err(Error::SessionNotFoundDuringRefresh)
-        }
-    }
-
-    /// verify database session with token
-    pub async fn verify(&self, uuid: Uuid, token: &str) -> Result<VerificationStatus> {
-        // extract uuid from Uuid enum
-        let key = match uuid {
-            Uuid::Crypto(buf) => buf,
-            _ => return Err(Error::SessionTokenIncorrectType)
-        };
-
-        let memory_hash = blake3::keyed_hash(&key, token.as_bytes()).as_bytes().to_base64_url();
-        let db_hash = &self.hash;
-
-        // constant time compare
-        Ok((db_hash == &memory_hash).to_verification_status())
+        Ok((result == RowsUpdated::RowsUpdated(1)).to_verification_status())
     }
 }
 

@@ -1,8 +1,8 @@
 use sqlx::FromRow;
 
 use crate::{
-    enums::{Error,UserAccountStatus,AuthorizationStatus},
-    traits::{ToUserAccountStatus,ToAuthorizationStatus},
+    enums::{Error,UserAccountStatus},
+    traits::{ToUserAccountStatus},
     types::{DatabaseConnection, UserPermissions}
 };
 
@@ -66,10 +66,7 @@ impl CommunityUser {
         }
     }
 
-    pub fn verify_password(&self, password: &str) -> AuthorizationStatus {
-        match bcrypt::verify(password, &self.hash) {
-            Ok(b)  => b.to_authorization_status(),
-            Err(_e) => AuthorizationStatus::Unauthorized
-        }
+    pub fn hash(&self) -> &str {
+        &self.hash
     }
 }

@@ -7,6 +7,7 @@ pub trait ToPermission {
 }
 
 impl ToPermission for bool {
+    #[inline]
     fn to_permission(self) -> Permission {
         match self {
             true => Permission::Granted,
@@ -16,6 +17,7 @@ impl ToPermission for bool {
 }
 
 impl ToPermission for i8 {
+    #[inline]
     fn to_permission(self) -> Permission {
         match self {
             1 => Permission::Granted,
@@ -25,6 +27,7 @@ impl ToPermission for i8 {
 }
 
 impl ToPermission for u8 {
+    #[inline]
     fn to_permission(self) -> Permission {
         match self {
             1 => Permission::Granted,

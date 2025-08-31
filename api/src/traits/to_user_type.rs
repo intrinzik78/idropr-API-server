@@ -7,6 +7,7 @@ pub trait ToUserType {
 }
 
 impl ToUserType for i8 {
+    #[inline]
     fn to_user_type(&self) -> Result<UserType> {
         let user_type = match self {
             ..0 => return Err(Error::UserTypeOutOfBounds),
@@ -21,6 +22,7 @@ impl ToUserType for i8 {
 }
 
 impl ToUserType for User {
+    #[inline]
     fn to_user_type(&self) -> Result<UserType> {
         let user_type = match self {
             User::Business(_) => UserType::Business,

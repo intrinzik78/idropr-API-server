@@ -70,6 +70,19 @@ impl SessionController {
         &self.hash_key
     }
 
+    /// blake 3 keyed hash for storage in database
+    #[inline]
+    async fn hash_token(&self, token: &str) -> Result<blake3::Hash> {
+        let uuid = match self.hash_key {
+            Uuid::Crypto(buf) => buf,
+            _ => return Err(Error::SessionTokenIncorrectType)
+        };
+        
+        let hash = blake3::keyed_hash(&uuid, token.as_bytes());
+        
+        Ok(hash)
+    }
+
     /// garbage collector interval
     pub async fn watch(&self) {
         // cannot be zero or it will run constantly with no delay
@@ -148,6 +161,7 @@ impl SessionController {
     }
 
     /// produces the shard id 
+    #[inline]
     fn idx(&self, key: &[u8]) -> Result<usize> {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
@@ -187,9 +201,16 @@ impl SessionController {
     }
 
     /// refresh a token from the database
-    pub async fn refresh(&self, user_id: i64, token_b64: &str, database: &DatabaseConnection) -> Result<Permission> {
-        let db_session = DatabaseSession::by_user_id(user_id, database).await?;
-        let verification_status = db_session.verify(self.hash_key.clone(),token_b64).await?;
+    pub async fn refresh(&self, token_b64: &str, database: &DatabaseConnection) -> Result<Permission> {
+        // verify the session on the database
+        let keyed_hash = self.hash_token(token_b64).await?;
+        let verification_status = DatabaseSession::verify(&keyed_hash, database).await?;
+
+        // decode from base64 extract key
+        let key = token_b64
+            .vec_from_base64_url()?
+            .to_key()?;
+        let idx = self.idx(&key)?;
 
         // short circuit on verification failure
         if verification_status == VerificationStatus::Unverified {
@@ -202,11 +223,6 @@ impl SessionController {
             }
         }
 
-        // decode from base64 to Vec<u8> and extract segments
-        let token = token_b64.vec_from_base64_url()?;
-        let key = token.to_key()?;
-        let idx = self.idx(&key)?;
-        
         // begin locked write scope
         {
             let mut locked_list = self.list[idx].write().map_err(|_e| Error::PoisonedSessionList)?;
