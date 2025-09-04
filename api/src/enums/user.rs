@@ -1,12 +1,9 @@
+use database::types::DatabaseConnection;
 use sqlx::prelude::FromRow;
-
 use crate::{
     traits::ToUserType,
     enums::{Error,UserType},
-    types::{
-        DatabaseConnection,
-        users::{BusinessUser,CommunityUser,SystemUser}
-    }
+    types::users::{BusinessUser,CommunityUser,SystemUser}
 };
 
 type Result<T> = std::result::Result<T,Error>;

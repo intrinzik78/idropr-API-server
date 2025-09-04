@@ -1,7 +1,8 @@
 [workspace]
 members = [
     "api",
-    "rate-limit"
+    "rate-limit",
+    "database"
 ]
 
 resolver = "3"

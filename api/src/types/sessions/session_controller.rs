@@ -1,9 +1,10 @@
+use database::types::DatabaseConnection;
 use std::{collections::HashMap, hash::{DefaultHasher,Hash,Hasher}, sync::RwLock, time::{Duration,Instant}};
 
 use crate::{
     enums::{AuthContext, Error, ExpiredStatus, Permission, sessions::RefreshStatus, User, Uuid, VerificationStatus},
     traits::{FromBase64, HasPermission, ToBase64, ToKeySet},
-    types::{DatabaseConnection, sessions::DatabaseSession, sessions::KeySet, sessions::Session, permissions::{PermissionCheck,UserPermissions}}
+    types::{sessions::DatabaseSession, sessions::KeySet, sessions::Session, permissions::{PermissionCheck,UserPermissions}}
 };
 
 type Result<T> = std::result::Result<T,Error>;

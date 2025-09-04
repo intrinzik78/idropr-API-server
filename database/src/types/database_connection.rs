@@ -3,14 +3,11 @@ use std::{fs::File, io::Read};
 use sqlx::mysql::{MySqlSslMode,MySqlConnectOptions,MySqlPool};
 
 use crate::{
-    enums::{
-        ConnectionStatus,
-         Error
-    },
+    enums::{ConnectionStatus,DatabaseError},
     types::Env
 };
 
-type Result<T> = std::result::Result<T,Error>;
+type Result<T> = std::result::Result<T,DatabaseError>;
 
 #[derive(Clone,Debug)]
 pub struct DatabaseConnection {
@@ -25,23 +22,26 @@ impl DatabaseConnection {
 
         // file handle
         let mut file_handle = File::open(path)
-            .map_err(|e| Error::StdError(e.to_string()))?;
+            .map_err(|e| DatabaseError::StdError(e.to_string()))?;
         
         // read into buffer
         let bytes_read = &mut file_handle
             .read_to_end(&mut pem_certificate)
-            .map_err(|e| Error::StdError(e.to_string()))?;
+            .map_err(|e| DatabaseError::StdError(e.to_string()))?;
 
         // success check
         if *bytes_read != pem_certificate.len() {
-            return Err(Error::PemCertFileReadSizeMismatch);
+            return Err(DatabaseError::PemCertFileReadSizeMismatch);
         }
 
         Ok(pem_certificate)
     }
 
     /// builder function
-    pub async fn new(env: &Env) -> Result<DatabaseConnection> {
+    pub async fn new() -> Result<DatabaseConnection> {
+        // load env type
+        let env = Env::default();
+
         // load env variables
         let db_user = &env.db_user;
         let db_port = env.db_port;
@@ -49,6 +49,7 @@ impl DatabaseConnection {
         let db_host = &env.db_host;
         let db_password = &env.db_password;
         let db_cert_path = &env.db_cert_path;
+        println!("{db_cert_path}");
         let pem_certificate = DatabaseConnection::pem_cert(db_cert_path).await?;
 
         // connection options
@@ -63,7 +64,7 @@ impl DatabaseConnection {
 
         let pool = MySqlPool::connect_with(options)
             .await
-            .map_err(|e| Error::DatabaseConnection(e.to_string()))?;
+            .map_err(|e| DatabaseError::DatabaseConnection(e.to_string()))?;
 
         let database_conection = DatabaseConnection {
             pool
@@ -100,9 +101,7 @@ pub mod test {
     /// tests database connection and pool connection
     #[actix_rt::test]
     async fn connection_status() {
-        let env = Env::default();
-
-        let database = DatabaseConnection::new(&env).await.expect("failed to connect to database");
+        let database = DatabaseConnection::new().await.expect("failed to connect to database");
         let connection_status = database.connection_status().await;
 
         assert_eq!(connection_status, ConnectionStatus::Connected);

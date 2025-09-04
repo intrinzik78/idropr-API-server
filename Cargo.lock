@@ -863,6 +863,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "database"
+version = "0.2.0"
+dependencies = [
+ "actix-rt",
+ "actix-web",
+ "aes-gcm",
+ "base64",
+ "chrono",
+ "derive_more 1.0.0",
+ "dotenv",
+ "serde",
+ "sqlx",
+]
+
+[[package]]
 name = "der"
 version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1533,6 +1548,7 @@ dependencies = [
  "blake3",
  "chrono",
  "clap",
+ "database",
  "derive_more 1.0.0",
  "dotenv",
  "futures",

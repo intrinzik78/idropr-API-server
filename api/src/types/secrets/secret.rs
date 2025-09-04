@@ -1,10 +1,11 @@
 use chrono::{DateTime,Utc};
+use database::types::DatabaseConnection;
 use sqlx::{FromRow, MySql, Transaction};
 
 use crate::{
     enums::{Error, MasterPassword, RowsAffected, RowsUpdated},
     traits::{ToAffectedResult, ToDecryptedString, ToEncryptedBuffer, ToUpdatedResult},
-    types::DatabaseConnection};
+};
 
 type Result<T> = std::result::Result<T,Error>;
 

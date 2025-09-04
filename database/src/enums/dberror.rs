@@ -6,7 +6,7 @@ use std::{
 };
 
 #[derive(Debug,From)]
-pub enum Error {
+pub enum DatabaseError {
     
     /// derived from actix_rt for async join errors
     #[from]
@@ -19,21 +19,9 @@ pub enum Error {
     #[from]
     Base64(base64::DecodeError),
 
-    #[from]
-    DatabaseError(database::enums::DatabaseError),
-
-
-    /// derived from `rand::rand_core::OsError`
-    #[from]
-    OsError(rand::rand_core::OsError),
-
     /// derived from `sqlx::Error` for database errors
     #[from]
     Sqlx(sqlx::Error),
-    
-    /// derived from `bcrypt::BcryptError` for hashing errors
-    #[from]
-    BcryptError(bcrypt::BcryptError),
     
     /// derived from `aes_gcm::Error` for encryption errors
     #[from]
@@ -90,24 +78,24 @@ pub enum Error {
     DevError(String),
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for DatabaseError {}
 
-impl Display for Error {
+impl Display for DatabaseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // print only on non-production server modes, otherwise do not print detailed
         match self {
-            Error::DatabaseConnection(e) => write!(f, "[database] Error connecting to database with message: {e}"),
-            Error::DatabaseConnectionTestFailed => write!(f, "[database] Sqlx returned a valid connection, but a subsequent connection test failed."),
-            Error::PemCertFileReadSizeMismatch => write!(f, "[file:io] Failed to read pem-certificate."),
-            Error::PoisonedSessionList => write!(f,"[sessions] Session shard could not be locked."),
-            Error::SessionTokenLengthTooLong => write!(f,"[sessions] Client provided session token out of bounds: too long."),
-            Error::SessionTokenLengthTooShort => write!(f,"[sessions] Client provided session token out of bounds: too short"),
-            Error::ServerCrash(server_error) => write!(f,"[http server error] {server_error}"),
-            Error::ZeroLengthUUIDFound => write!(f, "[uuid] Invalid length provided to uuid generator"),
-            Error::SystemSettingsRecordNotReturned => write!(f, "[database] System settings not found in database."),
-            Error::UserTypeOutOfBounds => write!(f,"[api] invalid user type given"),
-            Error::DevError(dev_message) => write!(f,"[dev message] {dev_message}"),
-            Error::WrongUuidTypeForSessionHash => write!(f,"[sessions] Bad UUID type given for session hash"),
+            DatabaseError::DatabaseConnection(e) => write!(f, "[database] Error connecting to database with message: {e}"),
+            DatabaseError::DatabaseConnectionTestFailed => write!(f, "[database] Sqlx returned a valid connection, but a subsequent connection test failed."),
+            DatabaseError::PemCertFileReadSizeMismatch => write!(f, "[file:io] Failed to read pem-certificate."),
+            DatabaseError::PoisonedSessionList => write!(f,"[sessions] Session shard could not be locked."),
+            DatabaseError::SessionTokenLengthTooLong => write!(f,"[sessions] Client provided session token out of bounds: too long."),
+            DatabaseError::SessionTokenLengthTooShort => write!(f,"[sessions] Client provided session token out of bounds: too short"),
+            DatabaseError::ServerCrash(server_error) => write!(f,"[http server error] {server_error}"),
+            DatabaseError::ZeroLengthUUIDFound => write!(f, "[uuid] Invalid length provided to uuid generator"),
+            DatabaseError::SystemSettingsRecordNotReturned => write!(f, "[database] System settings not found in database."),
+            DatabaseError::UserTypeOutOfBounds => write!(f,"[api] invalid user type given"),
+            DatabaseError::DevError(dev_message) => write!(f,"[dev message] {dev_message}"),
+            DatabaseError::WrongUuidTypeForSessionHash => write!(f,"[sessions] Bad UUID type given for session hash"),
             _ => write!(f, "{self:?}")
         }
     }

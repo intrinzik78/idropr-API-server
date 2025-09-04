@@ -1,11 +1,23 @@
-use actix_web::{web::Data,HttpRequest,Responder};
+use actix_web::{Responder,web::{Data,Path}};
+use serde::Deserialize;
 
-use crate::{types::{ApiResponse,AppState}};
+use crate::types::{ApiResponse,AppState, permissions::WereChecked};
+
+#[derive(Deserialize)]
+pub struct ReqPath {
+    pub id:String
+}
 
 pub struct SecretsGet;
 
+
 impl SecretsGet {
-    pub async fn logic(_req: HttpRequest, _shared: Data<AppState>) -> impl Responder {
+    pub async fn logic(_permissions: WereChecked, path: Path<ReqPath>, shared: Data<AppState>) -> impl Responder {
+        let _database = shared.database();
+
+        let _id = path.into_inner().id;
+
         ApiResponse::success()
     }
 }
+

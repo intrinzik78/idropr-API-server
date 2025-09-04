@@ -1,6 +1,7 @@
 use blake3::Hash;
 use blake3;
 use chrono::{DateTime,Utc};
+use database::types::DatabaseConnection;
 use sqlx::{prelude::FromRow};
 use std::{time::{Duration, Instant}};
 use rand::random_range;
@@ -8,7 +9,7 @@ use rand::random_range;
 use crate::{
     enums::{Error, ExpiredStatus, sessions::RefreshStatus, RowsUpdated, User, VerificationStatus},
     traits::{ToUpdatedResult, ToVerificationStatus},
-    types::{DatabaseConnection, sessions::KeySet}
+    types::sessions::KeySet
 };
 
 type Result<T> = std::result::Result<T,Error>;

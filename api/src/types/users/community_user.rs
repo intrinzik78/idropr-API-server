@@ -1,9 +1,10 @@
+use database::types::DatabaseConnection;
 use sqlx::FromRow;
 
 use crate::{
     enums::{Error,UserAccountStatus},
     traits::{ToUserAccountStatus},
-    types::{DatabaseConnection, permissions::UserPermissions}
+    types::permissions::UserPermissions
 };
 
 type Result<T> = std::result::Result<T,Error>;

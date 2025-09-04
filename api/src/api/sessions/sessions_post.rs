@@ -1,11 +1,12 @@
 use actix_web::{web,Responder};
 use blake3;
+use database::types::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    enums::{AuthorizationStatus, Error, SessionControllerStatus, User, Uuid},
+    enums::{AuthorizationStatus, Error, sessions::SessionControllerStatus, User, Uuid},
      traits::VerifyPassword,
-     types::{ApiResponse, AppState, DatabaseConnection, DatabaseSession, KeySet, Session}
+     types::{ApiResponse, AppState, sessions::{DatabaseSession, KeySet, Session}}
 };
 
 type Result<T> = std::result::Result<T,Error>;

@@ -1,13 +1,15 @@
+use database::{
+    enums::ConnectionStatus,
+    types::DatabaseConnection
+};
+
 use crate::{
     enums::{
-        ConnectionStatus,
         Error,
         RateLimiterStatus,
         sessions::SessionControllerStatus
     },
-    types::{
-        DatabaseConnection, Env, secrets::SecretController, Settings
-    }
+    types::{secrets::SecretController,Settings}
 };
 
 type Result<T> = std::result::Result<T,Error>;
@@ -26,12 +28,12 @@ pub struct AppState {
 impl AppState {
 
     /// constructor
-    pub async fn new(env: &Env) -> Result<AppState> {
+    pub async fn new() -> Result<AppState> {
         // system settings
         let settings = Settings::default();
 
         // connect database
-        let database = DatabaseConnection::new(env).await?;
+        let database = DatabaseConnection::new().await?;
 
         // retreive encrypted api key sets
         let secrets = SecretController::new(settings.master_password.clone(), &database).await?;
@@ -122,11 +124,11 @@ mod tests {
     async fn app_state_builder() {
         // constructor build test
         let env = Env::default();
-        let _constructor_test: AppState = AppState::new(&env).await.unwrap();
+        let _constructor_test: AppState = AppState::new().await.unwrap();
         
         let env_vars = Env::default();
         let server_port = env_vars.server_port;
-        let database = DatabaseConnection::new(&env_vars).await.expect("failed to build database connection in app state test");
+        let database = DatabaseConnection::new().await.expect("failed to build database connection in app state test");
         let master_password = MasterPassword::Some(env.master_password);
 
         let settings = Settings {

@@ -1,11 +1,11 @@
+use database::types::DatabaseConnection;
 use std::{collections::HashMap, sync::RwLock, time::{Duration, Instant}};
-
 use sqlx::{MySql, Transaction};
 
 use crate::{
     enums::{Error, MasterPassword, RowsAffected, RowsUpdated},
     traits::ToEncryptedBuffer,
-    types::{secrets::{DecryptedSecret, EncryptedSecret}, DatabaseConnection}
+    types::{secrets::{DecryptedSecret, EncryptedSecret}}
 };
 
 type Result<T> = std::result::Result<T,Error>;
@@ -399,35 +399,26 @@ impl SecretController {
 
 #[cfg(test)]
 mod tests {
+    use database::types::DatabaseConnection;
     use std::num::NonZeroU8;
-
     use super::*;
     use crate::{
         enums::{RowsAffected, Uuid},
-        types::{DatabaseConnection, Env}
+        types::Env
     };
 
     #[actix_rt::test]
     async fn new_rotate_delete() {
         let env = Env::default();
 
-        // build a random uuid name
-        let uuid = Uuid::web_safe(NonZeroU8::new(32)).unwrap();
-        let secret_name = match uuid {
-            Uuid::WebSafe(s) => s,
-            _ => panic!("no api name found in uuid")
-        };
-
         // instantiate
         let master_password = MasterPassword::Some(env.master_password.clone());
-        let database = DatabaseConnection::new(&env).await.unwrap();
+        let database = DatabaseConnection::new().await.unwrap();
         let mut secret_controller = SecretController::new(master_password.clone(), &database).await.unwrap();
         
-
         // build another random uuid name
         let uuid = Uuid::web_safe(NonZeroU8::new(32)).unwrap();
-        
-        let name = match uuid {
+        let secret_name = match uuid {
             Uuid::WebSafe(n) => n,
             _ => panic!("no api name found in uuid")
         };
@@ -436,7 +427,7 @@ mod tests {
         let description = String::from("description");
         let api_key = String::from("api_key");
         let api_secret = String::from("api_secret");
-        let secret = DecryptedSecret::new(&name, &description, &Some(api_key.clone()), &Some(api_secret.clone()));
+        let secret = DecryptedSecret::new(&secret_name, &description, &Some(api_key.clone()), &Some(api_secret.clone()));
 
         // encrypt
         let encrypted_secret = secret.encrypt(&master_password)
@@ -463,6 +454,8 @@ mod tests {
         // refresh the controller's decrypted secrets list
         secret_controller.refresh_secrets_list(&database).await.unwrap();
 
+        println!("{secret_controller:?}");
+
         // copy the new secret
         let mem = secret_controller
             .get(&secret_name)
@@ -470,7 +463,7 @@ mod tests {
             .unwrap();
 
         // run tests to verify decrypted data is as expected
-        assert_eq!(mem.name(), name, "the decrypted api name did not match the original input name");
+        assert_eq!(mem.name(), secret_name, "the decrypted api name did not match the original input name");
         assert_eq!(mem.api_key().unwrap().to_owned(), api_key, "the decrypted api key did not match the original input key");
         assert_eq!(mem.api_secret().unwrap().to_owned(), api_secret, "the decrypted api_secret did not match the original input secret");
         assert_eq!(mem.description(), description);
@@ -499,7 +492,7 @@ mod tests {
 
         assert_eq!(count,RowsUpdated::Some(1));
         
-        let encrypted = EncryptedSecret::by_name(&name.clone(), &database)
+        let encrypted = EncryptedSecret::by_name(&secret_name.clone(), &database)
             .await
             .unwrap()
             .unwrap();
@@ -509,7 +502,7 @@ mod tests {
             .unwrap();
 
         // delete test from database
-        let delete_result = EncryptedSecret::delete_from_db(&name, &database)
+        let delete_result = EncryptedSecret::delete_from_db(&secret_name, &database)
             .await
             .unwrap();
 
@@ -524,7 +517,7 @@ mod tests {
 
         // delete from memory
         let delete_result = secret_controller
-            .delete(&name)
+            .delete(&secret_name)
             .await;
 
         assert!(delete_result.is_ok());

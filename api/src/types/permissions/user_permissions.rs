@@ -2,10 +2,10 @@
 use sqlx::{FromRow, MySql, Transaction};
 
 // internal libraries
+use database::types::DatabaseConnection;
 use crate::{
     enums::{Action, Error, Resource, Role, Scope},
-    traits::{HasPermission, U128Bits},
-    types::DatabaseConnection
+    traits::{HasPermission, U128Bits}
 };
 
 type Result<T> = std::result::Result<T,Error>;
