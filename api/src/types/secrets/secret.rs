@@ -1,13 +1,12 @@
-use aes_gcm::{aead::{Aead, OsRng}, AeadCore, Aes256Gcm, Key, KeyInit, Nonce};
 use chrono::{DateTime,Utc};
 use sqlx::{FromRow, MySql, Transaction};
 
-use crate::{enums::{Error, MasterPassword},types::DatabaseConnection};
+use crate::{
+    enums::{Error, MasterPassword, RowsAffected, RowsUpdated},
+    traits::{ToAffectedResult, ToDecryptedString, ToEncryptedBuffer, ToUpdatedResult},
+    types::DatabaseConnection};
 
 type Result<T> = std::result::Result<T,Error>;
-
-const NONCE_LEN:usize = 12;
-const KEY_LEN:usize = 32;
 
 #[derive(Clone,Debug,FromRow)]
 pub struct EncryptedSecret {
@@ -33,13 +32,39 @@ pub struct DecryptedSecret {
 
 //async
 impl EncryptedSecret {
+    /// api_key getter
+    pub fn api_key(&self) -> Option<&Vec<u8>> {
+        self.api_key.as_ref()
+    }
+
+    /// api_secret getter
+    pub fn api_secret(&self) -> Option<&Vec<u8>> {
+        self.api_secret.as_ref()
+    }
 
     /// query db for an api secret by api name
+    fn by_name_sql() -> String {
+        String::from("SELECT id,name,description,api_key,api_secret,created_at,updated_at FROM `api_secrets` WHERE name = ?")
+    }
+
+    /// query db for an encrypted secret
     pub async fn by_name(secret_name: &str, database: &DatabaseConnection) -> Result<Option<EncryptedSecret>> {
-        let sql = "SELECT id,name,description,api_key,api_secret,created_at,updated_at FROM `api_secrets` WHERE name = ?";
+        let sql = &Self::by_name_sql();
         let secret_opt: Option<EncryptedSecret> = sqlx::query_as(sql)
             .bind(secret_name)
             .fetch_optional(&database.pool)
+            .await?;
+
+        Ok(secret_opt)
+    }
+
+    /// query db for an encrypted secret during a transaction
+    pub async fn by_name_as_transaction(name: &str, tx: &mut Transaction<'_,MySql>) -> Result<Option<EncryptedSecret>> {
+        let sql = &Self::by_name_sql();
+
+        let secret_opt: Option<EncryptedSecret> = sqlx::query_as(sql)
+            .bind(name)
+            .fetch_optional(&mut **tx)
             .await?;
 
         Ok(secret_opt)
@@ -67,97 +92,19 @@ impl EncryptedSecret {
     }
 
     /// private decryption algo which decrypts on a spawned blocking thread
-    pub async fn decrypt(&self, master_password: MasterPassword) -> Result<DecryptedSecret> {
-        let password = match &master_password {
-            MasterPassword::Some(password) => password,
-            MasterPassword::None => return Err(Error::MasterPasswordNotProvided)
-        };
-        
-        // extract key or create empty vec
-        let encrypted_key: Vec<u8> = self.api_secret
-            .clone()
-            .map_or(Vec::with_capacity(0), |s| s.to_owned());
+    pub async fn decrypt(&self, master_password: &MasterPassword) -> Result<DecryptedSecret> {
 
         // extract key or create empty vec
-        let encrypted_secret: Vec<u8> = self.api_key
-            .clone()
-            .map_or(Vec::with_capacity(0), |s| s.to_owned());
-
-        // build cipher
-        let cipher = {
-            // create 32 byte slice and copy password into it
-            let slice = password.as_bytes();
-            let mut master_password: [u8;KEY_LEN] = [0_u8;32];
-            master_password[..password.len()].copy_from_slice(slice);
-
-            // test for copy success
-            if &master_password[..password.len()] != slice {
-                return Err(Error::SliceNotCopied)
-            }
-
-            // create cipher key
-            let key = Key::<Aes256Gcm>::from_slice(&master_password);
-            Aes256Gcm::new(key)
+        let api_key = match &self.api_key {
+            Some(key) => key.decrypt_to_string(master_password).await?,
+            None => None
         };
 
-        // try decrypt key in a blocking thread
-        let api_key = {
-            if !encrypted_key.is_empty() {
-                let decrypted_data= actix_rt::task::spawn_blocking(move || {
-                    let nonce_bytes = &encrypted_key[..NONCE_LEN];
-                    let nonce = Nonce::from_slice(nonce_bytes);
-                    let ciphertext = &encrypted_key[NONCE_LEN..];
-
-                    cipher.decrypt(nonce, ciphertext)
-                })
-                .await??;
-
-                // try convert to utf8 string
-                let plain_text = String::from_utf8(decrypted_data)?;
-                
-                Some(plain_text)
-            } else {
-                None
-            }
+        // extract key or create empty vec
+        let api_secret = match &self.api_secret {
+            Some(secret) => secret.decrypt_to_string(master_password).await?,
+            None => None
         };
-
-        // build cipher
-        let cipher = {
-            // create 32 byte slice and copy password into it
-            let slice = password.as_bytes();
-            let mut master_password: [u8;KEY_LEN] = [0_u8;32];
-            master_password[..password.len()].copy_from_slice(slice);
-
-            // test for copy success
-            if &master_password[..password.len()] != slice {
-                return Err(Error::SliceNotCopied)
-            }
-
-            // create cipher key
-            let key = Key::<Aes256Gcm>::from_slice(&master_password);
-            Aes256Gcm::new(key)
-        };
-
-        // try decrypt key in a blocking thread
-        let api_secret = {
-            if !encrypted_secret.is_empty() {
-                let decrypted_data= actix_rt::task::spawn_blocking(move || {
-                    let nonce_bytes = &encrypted_secret[..NONCE_LEN];
-                    let nonce = Nonce::from_slice(nonce_bytes);
-                    let ciphertext = &encrypted_secret[NONCE_LEN..];
-
-                    cipher.decrypt(nonce, ciphertext)
-                })
-                .await??;
-
-                // try convert to utf8 string
-                let plain_text = String::from_utf8(decrypted_data)?;
-                
-                Some(plain_text)
-            } else {
-                None
-            }
-        }; 
 
         Ok(DecryptedSecret {
             id: self.id,
@@ -184,6 +131,108 @@ impl EncryptedSecret {
 
         Ok(insert_id)
     }
+
+    /// insert record into db as a transaction
+    pub async fn into_db(&self, database: &DatabaseConnection) -> Result<u64> {
+        let sql = "INSERT INTO `api_secrets` (name,description,api_key,api_secret) VALUES(?,?,?,?)";
+        let insert_id = sqlx::query(sql)
+            .bind(&self.name)
+            .bind(&self.description)
+            .bind(&self.api_key)
+            .bind(&self.api_secret)
+            .execute(&database.pool)
+            .await?
+            .last_insert_id();
+
+        Ok(insert_id)
+    }
+
+    /// update the api name in the database
+    pub async fn update_db_name(cur_name: &str, new_name:&str, tx: &mut Transaction<'_,MySql>) -> Result<RowsUpdated> {
+        let sql = "UPDATE `api_secrets` SET name = ? WHERE name = ?";
+        let rows_updated = sqlx::query(sql)
+            .bind(new_name)
+            .bind(cur_name)
+            .execute(&mut **tx)
+            .await?
+            .rows_affected()
+            .to_updated_result();
+
+        Ok(rows_updated)
+    }
+
+    /// update the api key in the database
+    pub async fn update_db_api_key(name: &str, api_key: &[u8], tx: &mut Transaction<'_,MySql>) -> Result<RowsUpdated> {
+        let sql = "UPDATE `api_secrets` SET api_key = ? WHERE name = ?";
+        let rows_updated = sqlx::query(sql)
+            .bind(api_key)
+            .bind(name)
+            .execute(&mut **tx)
+            .await?
+            .rows_affected()
+            .to_updated_result();
+
+        Ok(rows_updated)
+    }
+
+    /// update the api secret in the database
+    pub async fn update_db_api_secret(name: &str, api_secret: &[u8], tx: &mut Transaction<'_,MySql>) -> Result<RowsUpdated> {
+        let sql = "UPDATE `api_secrets` SET api_secret = ? WHERE name = ?";
+        let rows_updated = sqlx::query(sql)
+            .bind(api_secret)
+            .bind(name)
+            .execute(&mut **tx)
+            .await?
+            .rows_affected()
+            .to_updated_result();
+
+        Ok(rows_updated)
+    }
+
+    /// delete a record from the database by name
+    pub async fn delete_from_db(name: &str, database: &DatabaseConnection) -> Result<RowsAffected> {
+        let sql = "DELETE FROM `api_secrets` WHERE name = ? LIMIT 1";
+        let rows_affected = sqlx::query(sql)
+            .bind(name)
+            .execute(&database.pool)
+            .await?
+            .rows_affected()
+            .to_affected_result();
+
+        Ok(rows_affected)
+    }
+
+    /// delete a record from the database by name
+    pub async fn delete_from_db_as_transaction(name: &str, tx: &mut Transaction<'_,MySql>) -> Result<RowsAffected> {
+        let sql = "DELETE FROM `api_secrets` WHERE name = ? LIMIT 1";
+        let rows_affected = sqlx::query(sql)
+            .bind(name)
+            .execute(&mut **tx)
+            .await?
+            .rows_affected()
+            .to_affected_result();
+
+        Ok(rows_affected)
+    }
+
+    /// updates the api name on the database
+    pub async fn update_db_description(name: &str, description: &str, database: &DatabaseConnection) -> Result<RowsUpdated> {
+        let sql = "UPDATE `api_secrets` SET description = ? WHERE name = ?";
+        let rows_updated = sqlx::query(sql)
+            .bind(description)
+            .bind(name)
+            .execute(&database.pool)
+            .await?
+            .rows_affected()
+            .to_updated_result();
+
+        Ok(rows_updated)
+    }
+
+
+    pub async fn rotate_encryption() {
+
+    }
 }
 
 // sync
@@ -198,6 +247,26 @@ impl DecryptedSecret {
             created_at: None,
             updated_at: None
         }
+    }
+
+    /// name setter
+    pub fn set_name(&mut self, name: &str) {
+        self.name = name.to_owned();
+    }
+
+    /// name setter
+    pub fn set_description(&mut self, description: &str) {
+        self.description = description.to_owned();
+    }
+
+    /// api_key setter
+    pub fn set_api_key(&mut self, api_key: &str) {
+        self.api_key = Some(api_key.to_owned());
+    }
+
+    /// api_secret setter
+    pub fn set_api_secret(&mut self, api_secret: &str) {
+        self.api_secret = Some(api_secret.to_owned());
     }
 
     /// id getter
@@ -226,87 +295,35 @@ impl DecryptedSecret {
     }
 
     /// public api key getter
-    pub async fn api_key(&self) -> Option<&String> {
+    pub fn api_key(&self) -> Option<&String> {
         self.api_key.as_ref()
     }
 
     /// public api secret getter
-    pub async fn api_secret(&self) -> Option<&String> {
+    pub fn api_secret(&self) -> Option<&String> {
         self.api_secret.as_ref()
     }  
 
     /// private encryption algo for storing keys/secrets in the database
-    pub async fn encrypt(&self, master_password: MasterPassword) -> Result<EncryptedSecret> {
-        let password = match &master_password {
-            MasterPassword::Some(password) => password.clone(),
-            MasterPassword::None => return Err(Error::MasterPasswordNotProvided)
+    pub async fn encrypt(&self, master_password: &MasterPassword) -> Result<EncryptedSecret> {
+        // encrypt api key
+        let api_key = match &self.api_key {
+            Some(api_key) => Some(api_key.as_str().encrypt(master_password).await?),
+            None => None
         };
 
-        // max token length is 32 characters
-        if password.len() > 32 || password.is_empty() {
-            return Err(Error::ApiPasswordOutOfBounds);
-        }
-
-        let slice = password.as_bytes();
-        let master_key: &mut [u8;32] = &mut [0u8;32];
-        
-        master_key[..slice.len()].copy_from_slice(slice);
-          
-        // verify data was copied
-        if &master_key[..slice.len()] != slice {
-            return Err(Error::SliceNotCopied);
-        }
-
-        // generate cipher
-        let key = Key::<Aes256Gcm>::from_slice(master_key);
-        let cipher = Aes256Gcm::new(key);
-
-        let encrypted_key = {
-            if let Some(api_key) = &self.api_key {
-                //build cipher
-                let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-                let plain_text = api_key.as_bytes();
-                let cipher_text = cipher.encrypt(&nonce, plain_text)?;
-                
-                //encrypt
-                let mut encrypted_api_secret:Vec<u8> = Vec::with_capacity(NONCE_LEN + cipher_text.len());
-
-                //append nonce
-                encrypted_api_secret.extend_from_slice(&nonce);
-                encrypted_api_secret.extend_from_slice(&cipher_text);
-
-                Some(encrypted_api_secret)
-            } else {
-                None
-            }
-        };
-
-        let encrypted_secret = {
-            if let Some(api_secret) = &self.api_secret {
-                // build cipher
-                let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-                let plain_text = api_secret.as_bytes();
-                let cipher_text = cipher.encrypt(&nonce, plain_text)?;
-                
-                // encrypt
-                let mut encrypted_api_secret:Vec<u8> = Vec::with_capacity(NONCE_LEN + cipher_text.len());
-
-                //append nonce
-                encrypted_api_secret.extend_from_slice(&nonce);
-                encrypted_api_secret.extend_from_slice(&cipher_text);
-
-                Some(encrypted_api_secret)
-            } else {
-                None
-            }
+        // encrypt api secret
+        let api_secret = match &self.api_secret {
+            Some(api_secret) => Some(api_secret.as_str().encrypt(master_password).await?),
+            None => None
         };
 
         Ok(EncryptedSecret {
             id: self.id,
             name: self.name.clone(),
             description: self.description.clone(),
-            api_key: encrypted_key,
-            api_secret: encrypted_secret,
+            api_key,
+            api_secret,
             created_at: self.created_at,
             updated_at: self.updated_at,
         })
@@ -341,8 +358,8 @@ mod tests {
             updated_at: Some(now.clone())
         };
 
-        let encrypted = decrypted_secret.encrypt(master_password.clone()).await.unwrap();
-        let decrypted = encrypted.decrypt(master_password.clone()).await.unwrap();
+        let encrypted = decrypted_secret.encrypt(&master_password).await.unwrap();
+        let decrypted = encrypted.decrypt(&master_password).await.unwrap();
 
         assert_eq!(decrypted.api_key,decrypted_secret.api_key);
         assert_eq!(decrypted.api_secret,decrypted_secret.api_secret);

@@ -11,8 +11,8 @@ pub trait ToUpdatedResult {
 impl ToUpdatedResult for i64 {
     fn to_updated_result(self) -> RowsUpdated {
         match self {
-            0 => RowsUpdated::NoRowsUpdated,
-            _ => RowsUpdated::RowsUpdated(self as u64)
+            0 => RowsUpdated::None,
+            _ => RowsUpdated::Some(self as u64)
         }
     }
 }
@@ -20,8 +20,8 @@ impl ToUpdatedResult for i64 {
 impl ToUpdatedResult for u64 {
     fn to_updated_result(self) -> RowsUpdated {
         match self {
-            0 => RowsUpdated::NoRowsUpdated,
-            _ => RowsUpdated::RowsUpdated(self)
+            0 => RowsUpdated::None,
+            _ => RowsUpdated::Some(self)
         }
     }
 }
