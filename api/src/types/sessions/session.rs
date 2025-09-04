@@ -70,7 +70,7 @@ impl DatabaseSession {
             .rows_affected()
             .to_updated_result();
 
-        Ok((result == RowsUpdated::RowsUpdated(1)).to_verification_status())
+        Ok((result == RowsUpdated::Some(1)).to_verification_status())
     }
 }
 
