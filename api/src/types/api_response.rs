@@ -1,9 +1,12 @@
 use actix_web::{http::StatusCode, HttpResponse };
 use serde::Serialize;
+use utoipa::ToSchema;
 
 use crate::enums::ApiResult;
 
-#[derive(Debug,Serialize)]
+/// api response wrapper, returning the code,message and optional data
+#[derive(Debug,Serialize,ToSchema)]
+#[schema(bound = "T: utoipa::ToSchema")]
 pub struct ApiResponse <T> 
 where T: Serialize
 {

@@ -1,3 +1,4 @@
+pub mod open_api_doc;
 pub mod permissions;
 pub mod users;
 pub mod secrets;

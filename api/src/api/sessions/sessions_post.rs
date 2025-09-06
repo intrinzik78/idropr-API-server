@@ -2,24 +2,28 @@ use actix_web::{web,Responder};
 use blake3;
 use database::types::DatabaseConnection;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::{
     enums::{AuthorizationStatus, Error, sessions::SessionControllerStatus, User, Uuid},
-     traits::VerifyPassword,
-     types::{ApiResponse, AppState, sessions::{DatabaseSession, KeySet, Session}}
+    traits::VerifyPassword,
+    types::{ApiResponse, AppState, sessions::{DatabaseSession, KeySet, Session}}
 };
 
 type Result<T> = std::result::Result<T,Error>;
 
-#[derive(Debug,Deserialize)]
+ /// requires a user identifier (email,username) and the associated password
+#[derive(Debug,Deserialize,ToSchema)]
 pub struct Post {
     pub username: String,
     pub password: String
 }
 
-#[derive(Debug,Serialize)]
-pub struct DataContainer<'a> {
-    token: &'a str
+/// bearer token to use in `Authorization: Bearer <token>`
+#[derive(Debug,Serialize,ToSchema)]
+pub struct AccessToken<'a> {
+    /// required to make permissioned requests to the API
+    access_token: &'a str,
 }
 
 #[derive(Debug)]
@@ -41,7 +45,7 @@ impl SessionsPost {
 
     /// blake 3 keyed hash for storage in database
     #[inline]
-    async fn hash_token(token: &str, uuid: Uuid) -> Result<blake3::Hash> {
+    fn hash_token(token: &str, uuid: Uuid) -> Result<blake3::Hash> {
         let uuid = match uuid {
             Uuid::Crypto(buf) => buf,
             _ => return Err(Error::SessionTokenIncorrectType)
@@ -111,7 +115,7 @@ impl SessionsPost {
 
         // hash the token for insertion into the database
         let uuid = session_controller.hash_key().to_owned();
-        let hash = match Self::hash_token(&token,uuid).await {
+        let hash = match Self::hash_token(&token,uuid) {
             Ok(hashed) => hashed,
             Err(_e) => {
                 // log here
@@ -129,8 +133,8 @@ impl SessionsPost {
         };
 
         // format and send response
-        let response = DataContainer {
-            token: &token
+        let response = AccessToken {
+            access_token: &token
         };
 
         ApiResponse::default()

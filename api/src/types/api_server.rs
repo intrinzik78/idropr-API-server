@@ -3,6 +3,9 @@ use actix_web::{
     HttpServer
 };
 
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
+
 type Result<T> = std::result::Result<T,Error>;
 
 use crate::{
@@ -14,7 +17,8 @@ use crate::{
     types::{
         AppState,
         HeaderSettings,
-        RouteCollection
+        RouteCollection,
+        open_api_doc::ApiDoc
     }
 };
 
@@ -43,6 +47,22 @@ impl ApiServer {
                 .wrap(RateLimitMiddleware)
                 .wrap(cors)
                 .service(routes_v1)
+                .route("/api-docs/openapi.json", actix_web::web::get().to(|| async {
+                    actix_web::HttpResponse::Ok()
+                        .content_type("application/json")
+                        .body(ApiDoc::openapi().to_pretty_json().unwrap())
+                }))
+                // YAML spec
+                .route("/api-docs/openapi.yaml", actix_web::web::get().to(|| async {
+                    actix_web::HttpResponse::Ok()
+                        .content_type("application/yaml")
+                        .body(ApiDoc::openapi().to_yaml().unwrap())
+                }))
+                // Swagger UI
+                .service(
+                    SwaggerUi::new("/swagger-ui/{_:.*}")
+                        .url("/api-docs/openapi.json", ApiDoc::openapi())
+                )
         };
 
         // start server

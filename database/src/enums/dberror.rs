@@ -1,39 +1,15 @@
-use actix_web::http::header::ToStrError;
 use derive_more::derive::From;
-use std::{
-    fmt::Display,
-    string::FromUtf8Error
-};
+use std::{fmt::Display,string::FromUtf8Error};
 
 #[derive(Debug,From)]
 pub enum DatabaseError {
-    
-    /// derived from actix_rt for async join errors
-    #[from]
-    ActixJoinError(actix_rt::task::JoinError),
-    
-    /// derived from `actix_web::Error`
-    #[from]
-    Actix(actix_web::Error),
-
-    #[from]
-    Base64(base64::DecodeError),
-
     /// derived from `sqlx::Error` for database errors
     #[from]
     Sqlx(sqlx::Error),
     
     /// derived from `aes_gcm::Error` for encryption errors
     #[from]
-    EncryptionError(aes_gcm::Error),
-
-    /// derived from `aes_gcm::Error` for encryption errors
-    #[from]
     StdError(String),
-
-    /// derived from `aes_gcm::Error` for encryption errors
-    #[from]
-    ToStrError(ToStrError),
 
     /// Utf8 errors are generated during decryption when Vec<u8> is converted to plain text
     #[from]
