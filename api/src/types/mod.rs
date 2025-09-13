@@ -17,7 +17,6 @@ mod route_collection;
 
 mod settings;
 
-
 pub use authorization_token::AuthorizationToken;
 pub use api_response::ApiResponse;
 pub use api_server::ApiServer;

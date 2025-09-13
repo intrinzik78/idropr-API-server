@@ -1,14 +1,14 @@
 use actix_web::{web, Responder};
 use crate::types::{ApiResponse,AppState};
-use super::sessions_post::{AccessToken, Post, SessionsPost};
+use super::sessions_post::{AccessToken, CreateSessionBody, SessionsPost};
 
 #[utoipa::path(
     post,
     path = "/v1/sessions",
-    operation_id = "postSession",
-    tags = ["session","login"],
+    operation_id = "createSession",
+    tags = ["session"],
     // If your DTOs implement ToSchema, you can reference them by name here:
-    request_body = Post,
+    request_body = CreateSessionBody,
     responses(
         (
             status = 200, description = "OK", body = ApiResponse<AccessToken>,
@@ -18,7 +18,7 @@ use super::sessions_post::{AccessToken, Post, SessionsPost};
     )
 )]
 
-pub async fn post_sessions(post: web::Json<Post>, shared: web::Data<AppState>) -> impl Responder {
+pub async fn post_sessions(post: web::Json<CreateSessionBody>, shared: web::Data<AppState>) -> impl Responder {
     SessionsPost::logic(post, shared).await
 }
 
@@ -35,7 +35,7 @@ mod spec_tests {
         // list the concrete schemas that appear in the operation
         components(schemas(
             // request type
-            super::super::sessions_post::Post,
+            super::super::sessions_post::CreateSessionBody,
             // response inner payload
             super::super::sessions_post::AccessToken,
             // the generic envelope specialized with AccessToken
