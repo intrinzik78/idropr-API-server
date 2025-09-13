@@ -14,7 +14,7 @@ type Result<T> = std::result::Result<T,Error>;
 
  /// requires a user identifier (email,username) and the associated password
 #[derive(Debug,Deserialize,ToSchema)]
-pub struct Post {
+pub struct CreateSessionBody {
     pub username: String,
     pub password: String
 }
@@ -57,7 +57,7 @@ impl SessionsPost {
     }
 
     /// endpoint entry
-    pub async fn logic(post: web::Json<Post>, shared: web::Data<AppState>) -> impl Responder {
+    pub async fn logic(post: web::Json<CreateSessionBody>, shared: web::Data<AppState>) -> impl Responder {
         // get database connection
         let database = shared.database();
 
@@ -68,25 +68,25 @@ impl SessionsPost {
                     if let Some(user) = user_opt {
                         user
                     } else {
-                        return ApiResponse::unauthorized().ok();
+                        return ApiResponse::unauthorized().error();
                     }
                 },
                 Err(_e) => {
                     // log here
-                    return ApiResponse::unauthorized().ok();
+                    return ApiResponse::unauthorized().error();
                 }
             }
         };
 
         // verify password against hash from database
         if user.verify_password(&post.password).await == AuthorizationStatus::Unauthorized {
-            return ApiResponse::unauthorized().ok();
+            return ApiResponse::unauthorized().error();
         }
 
         // create a key set
         let key_set = match  KeySet::new() {
             Ok(set) => set,
-            Err(_e) => return ApiResponse::unauthorized().ok()
+            Err(_e) => return ApiResponse::unauthorized().error()
         };
 
         // get session controller
@@ -94,7 +94,7 @@ impl SessionsPost {
             SessionControllerStatus::Enabled(s) => s,
             SessionControllerStatus::Disabled => {
                 // log here
-                return ApiResponse::unauthorized().ok();
+                return ApiResponse::unauthorized().error();
             }
         };
 
@@ -109,7 +109,7 @@ impl SessionsPost {
             Ok(t) => t,
             Err(_e) => {
                 // log here
-                return ApiResponse::unauthorized().ok();
+                return ApiResponse::unauthorized().error();
             }
         };
 
@@ -119,7 +119,7 @@ impl SessionsPost {
             Ok(hashed) => hashed,
             Err(_e) => {
                 // log here
-                return ApiResponse::unauthorized().ok();
+                return ApiResponse::unauthorized().error();
             } 
         };
 
@@ -128,7 +128,7 @@ impl SessionsPost {
             Ok(_insert_id) => (),
             Err(_e) => {
                 // log here
-                return ApiResponse::unauthorized().ok();
+                return ApiResponse::unauthorized().error();
             }
         };
 
