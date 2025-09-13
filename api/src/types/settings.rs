@@ -1,5 +1,6 @@
 use chrono::{DateTime,Utc};
 use sqlx::FromRow;
+use database::types::DatabaseConnection;
 
 use crate::{
     enums::{
@@ -12,9 +13,7 @@ use crate::{
         ToServerMode,
         ToSystemFlag
     },
-    types::{
-        DatabaseConnection, Env
-    }
+    types::Env
 };
 
 type Result<T> = std::result::Result<T,Error>;

@@ -1,0 +1,15 @@
+[package]
+name = "database"
+version = "0.2.0"
+edition = "2024"
+
+[lib]
+name="database"
+
+[dependencies]
+actix-rt = "2.10.0"
+chrono = "0.4.40"
+derive_more = { version = "1.0.0", features = ["from"] }
+dotenv = "0.15.0"
+serde = { version = "1.0.218", features = ["derive"] }
+sqlx = { version = "0.8.3", features = ["mysql", "runtime-async-std", "time","chrono","tls-rustls"] }

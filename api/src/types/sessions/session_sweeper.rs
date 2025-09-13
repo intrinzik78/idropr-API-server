@@ -1,7 +1,7 @@
 use actix_web::web::Data;
 
 use crate::{
-    enums::SessionControllerStatus,
+    enums::sessions::SessionControllerStatus,
     types::AppState
 };
 

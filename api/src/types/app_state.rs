@@ -1,13 +1,15 @@
+use database::{
+    enums::ConnectionStatus,
+    types::DatabaseConnection
+};
+
 use crate::{
     enums::{
-        ConnectionStatus,
         Error,
         RateLimiterStatus,
-        SessionControllerStatus
+        sessions::SessionControllerStatus
     },
-    types::{
-        DatabaseConnection, Env, Settings
-    }
+    types::{secrets::SecretController,Settings}
 };
 
 type Result<T> = std::result::Result<T,Error>;
@@ -19,18 +21,22 @@ pub struct AppState {
     database: DatabaseConnection,
     settings: Settings,
     limiter: RateLimiterStatus,
+    secrets: SecretController,
     sessions: SessionControllerStatus,
 }
 
 impl AppState {
 
     /// constructor
-    pub async fn new(env: &Env) -> Result<AppState> {
+    pub async fn new() -> Result<AppState> {
         // system settings
         let settings = Settings::default();
 
         // connect database
-        let database = DatabaseConnection::new(env).await?;
+        let database = DatabaseConnection::new().await?;
+
+        // retreive encrypted api key sets
+        let secrets = SecretController::new(settings.master_password.clone(), &database).await?;
         
         // test connection status
         match database.connection_status().await {
@@ -41,6 +47,7 @@ impl AppState {
         // construct app state
         let app_state = AppState {
             database,
+            secrets,
             settings,
             limiter: RateLimiterStatus::Disabled,
             sessions: SessionControllerStatus::Disabled
@@ -97,14 +104,19 @@ impl AppState {
     pub fn settings(&self) -> &Settings {
         &self.settings
     }
+
+    /// secrets getter
+    pub fn secrets(&self) -> &SecretController {
+        &self.secrets
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::enums::{
-        ServerMode,
-        SystemFlag
+    use crate::{
+        enums::{ServerMode,SystemFlag,MasterPassword},
+        types::Env
     };
 
     /// constructor build test
@@ -112,34 +124,34 @@ mod tests {
     async fn app_state_builder() {
         // constructor build test
         let env = Env::default();
-        let _constructor_test: AppState = AppState::new(&env).await.unwrap();
-
+        let _constructor_test: AppState = AppState::new().await.unwrap();
+        
         let env_vars = Env::default();
         let server_port = env_vars.server_port;
-        let database = DatabaseConnection::new(&env_vars).await.expect("failed to build database connection in app state test");
-        let master_password = crate::enums::MasterPassword::None;
+        let database = DatabaseConnection::new().await.expect("failed to build database connection in app state test");
+        let master_password = MasterPassword::Some(env.master_password);
 
         let settings = Settings {
             load_email_queue_service: SystemFlag::Disabled,
             postmark_email_service: SystemFlag::Disabled,
             load_rate_limiter_service: SystemFlag::Disabled,
             load_text_queue_service: SystemFlag::Disabled,
-            master_password,
+            master_password: master_password.clone(),
             ip_address: String::from("ip_address"),
             server_mode: ServerMode::Maintenance,
             server_port,
             timestamp: chrono::Utc::now()
         };
 
+        let secrets = SecretController::new(settings.master_password.clone(), &database).await.expect("failed to build secrets controller");
+
         // manual build test
         let _manual_builder = AppState {
             database,
+            secrets,
             settings,
             limiter: RateLimiterStatus::Disabled,
             sessions: SessionControllerStatus::Disabled
         };
-
-        // connection status is already checked in the AppState constructor()
-        // assert_eq!(test.database.connection_status().await, ConnectionStatus::Connected);
     }
 }

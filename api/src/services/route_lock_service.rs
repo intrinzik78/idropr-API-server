@@ -1,38 +1,40 @@
 use std::rc::Rc;
 use actix_web::{
-    body::{EitherBody, BoxBody},
+    body::{BoxBody, EitherBody},
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
-    web::{Data},
-    HttpResponse,
-    Error
+    web::Data,
+    Error,
+    HttpMessage,
+    HttpResponse
 };
 use futures::future::{ok, LocalBoxFuture, Ready};
 use std::task::{Context, Poll};
 
 use crate::{
-    enums::{Permission,SessionControllerStatus},
-    types::{AppState, AuthorizationToken, UserPermissions}
+    enums::{AuthContext, Permission, sessions::{RefreshStatus,SessionControllerStatus}},
+    types::{AppState, AuthorizationToken, permissions::{NeedCheck, PermissionCheck, UserPermissions}}
 };
 
 /// target for the middleware service
-#[derive(Debug)]
+#[derive(Clone,Debug)]
 pub struct RouteLock {
     required_permissions: UserPermissions
 }
 
 impl RouteLock {
-    pub fn default(required_permissions: UserPermissions) -> RouteLock {
+    pub fn default(required_permissions: &UserPermissions) -> RouteLock {
+        let required_permissions = required_permissions.to_owned();
         RouteLock { required_permissions }
     }
 }
 
 impl<S,B> Transform<S, ServiceRequest> for RouteLock
 where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     S::Future: 'static,
     B: 'static,
 {
-    type Response = ServiceResponse<EitherBody<B>>;
+    type Response = ServiceResponse<EitherBody<B,BoxBody>>;
     type Error = Error;
     type Transform = RouteLockService<S>;
     type InitError = ();
@@ -53,25 +55,40 @@ pub struct RouteLockService<S> {
 }
 
 impl<S> RouteLockService<S> {
-    fn logic(shared: &Data<AppState>, token: &str, required_permissions: &UserPermissions) -> Permission {
-        
+    async fn logic(shared: Data<AppState>, token: &str, required_permissions: UserPermissions) -> PermissionCheck {
+        let failed_check =  PermissionCheck { permission: Permission::Denied, auth_context: AuthContext::None, refresh_status: RefreshStatus::None };
+
         // extract rate limiter or return early if disabled
         let session_controller = match shared.sessions() {
             SessionControllerStatus::Enabled(sessions) => sessions,
-            SessionControllerStatus::Disabled => return Permission::Granted
+            SessionControllerStatus::Disabled => return failed_check
         };
 
-        match session_controller.permission_check(token, required_permissions) {
-            Ok(permission) => permission,
-            Err(_) => Permission::None
+        let mut permissions_check = match session_controller.permission_check(token, required_permissions) {
+            Ok(perm_check) => perm_check,
+            Err(_) => return failed_check
+        };
+
+        if permissions_check.refresh_status == RefreshStatus::Refresh {
+            // extract database from shared data
+            let database = shared.database();
+
+            // retrieve session from database
+            permissions_check.permission = match session_controller.refresh(token, database).await {
+                Ok(permission) => permission,
+                Err(_e) => return failed_check
+            };
         }
+
+        permissions_check
     }
+    
 }
 
 impl<S, B> Service<ServiceRequest> for RouteLockService<S>
 where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
-    S::Future: 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S::Future: 'static, 
     B: 'static,
 {
     // wraps ServiceResponse<B> in an EitherBody
@@ -84,36 +101,39 @@ where
         self.service.poll_ready(ctx)
     }
 
-    fn call(&self, req: ServiceRequest) -> Self::Future {
-        let required_permissions = &self.required_permissions;
-
-        let permission_status = match AuthorizationToken::extract(&req) {
-            Ok(token) => {
-                req
-                .app_data()
-                .map_or(Permission::None, |shared: &Data<AppState>| RouteLockService::<S>::logic(shared, &token, required_permissions))
-            },
-            Err(_) => Permission::None
-        };
-
-        // return early with a Forbidden response
-        if permission_status == Permission::None {
-            // map fail into BoxBody
-            let res = req
-                .into_response(HttpResponse::Unauthorized()
-                .body("Unauthorized"))
-                .map_into_right_body();
-
-            return Box::pin(async move { Ok(res) });
-        }
-
-        // return the result of the success branch
-        let fut = self.service.call(req);
+    fn call(& self, req: ServiceRequest) -> Self::Future {
+        let service = self.service.clone();
+        let required_permissions = *self.required_permissions;
+        let token_res = AuthorizationToken::extract(&req)
+            .map (|s| s.to_owned())
+            .map_err(|_e| actix_web::error::ErrorUnauthorized("Unauthorized"));
+        let shared_res = req
+            .app_data::<Data<AppState>>()
+            .cloned()
+            .ok_or(actix_web::error::ErrorUnauthorized("Unauthorized"));
 
         Box::pin(async move {
-            let res = fut.await?;
+            let token = token_res?;
+            let shared = shared_res?;
+            
+            let check = RouteLockService::<S>::logic(shared, &token, required_permissions).await;
 
-            // map the success branch into the B
+            if check.permission  == Permission::Denied {
+                let res = req
+                    .into_response(HttpResponse::Unauthorized()
+                    .body("Unauthorized"))
+                    .map_into_right_body();
+                
+                return Ok(res)
+            } else {
+                req.extensions_mut().insert(NeedCheck(required_permissions));
+                req.extensions_mut().insert(check.auth_context);
+            }
+
+            // build future
+            let res = service.call(req).await?;
+
+            // map response into success branch
             Ok(res.map_into_left_body())
         })
     }

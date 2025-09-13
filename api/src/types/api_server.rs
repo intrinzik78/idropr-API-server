@@ -14,7 +14,8 @@ use crate::{
     types::{
         AppState,
         HeaderSettings,
-        RouteCollection
+        RouteCollection,
+        open_api_doc::ApiDoc
     }
 };
 
@@ -43,6 +44,8 @@ impl ApiServer {
                 .wrap(RateLimitMiddleware)
                 .wrap(cors)
                 .service(routes_v1)
+                .route("/api-docs/openapi.yaml", actix_web::web::get().to(ApiDoc::yaml))
+                .route("/api-docs/openapi.json", actix_web::web::get().to(ApiDoc::json))
         };
 
         // start server

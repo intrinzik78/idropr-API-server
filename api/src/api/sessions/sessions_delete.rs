@@ -1,7 +1,7 @@
 use actix_web::{web,HttpRequest,Responder};
 
 use crate::{
-    enums::SessionControllerStatus,
+    enums::sessions::SessionControllerStatus,
     traits::ToHeaderAuthToken,
     types::{ApiResponse, AppState}
 };

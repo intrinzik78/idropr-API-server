@@ -5,6 +5,7 @@ pub trait ToAuthorizationStatus {
 }
 
 impl ToAuthorizationStatus for bool {
+    #[inline]
     fn to_authorization_status(&self) -> AuthorizationStatus {
         match self {
             true  => AuthorizationStatus::Authorized,

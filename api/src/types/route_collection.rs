@@ -2,12 +2,10 @@
 use actix_web::{web,Scope};
 
 use crate::{
-    api::{
-        HealthCheck,
-        sessions
-    },
+    api::{HealthCheck,sessions,secrets},
+    enums::Role,
     services::RouteLock,
-    types::UserPermissions
+    types::permissions::UserPermissions
 };
 
 #[derive(Clone,Debug)]
@@ -20,6 +18,7 @@ impl RouteCollection {
         Scope::new("/v1")
             .configure(RouteCollection::health)
             .configure(RouteCollection::sessions)
+            .configure(RouteCollection::secrets)
     }
 }
 
@@ -33,10 +32,13 @@ impl RouteCollection {
 
     /// sessions resource and endpoints
     pub fn sessions(cfg: &mut web::ServiceConfig) {
-        cfg.route("/sessions", web::post().to(sessions::SessionsPost::logic));
-        
-        let permissions = UserPermissions::default().with_sessions_delete();
-        cfg.route("/sessions", web::delete().to(sessions::SessionsDelete::logic).wrap(RouteLock::default(permissions)));
+        let user = UserPermissions::from_role(Role::User);
+
+        cfg.service(
+            actix_web::web::scope("/sessions")
+                .route("", web::post().to(sessions::SessionsPost::logic))
+                .route("", web::delete().to(sessions::SessionsDelete::logic).wrap(RouteLock::default(&user)))
+        );
     }
     
     /// users resource and endpoints
@@ -52,5 +54,20 @@ impl RouteCollection {
     /// images resource and endpoints
     pub fn images(_cfg: &mut web::ServiceConfig) {
         todo!()
+    }
+
+    /// secrets resource and endpoings
+    pub fn secrets(cfg: &mut web::ServiceConfig) {
+        let sysadmin = UserPermissions::from_role(Role::SysAdmin);
+
+        cfg.service(
+            actix_web::web::scope("/secrets")
+                .wrap(RouteLock::default(&sysadmin))
+                .route("", actix_web::web::post().to(secrets::SecretsPost::logic))
+                .route("/{id}", actix_web::web::get().to(secrets::SecretsGet::logic))
+                .route("/{id}", actix_web::web::put().to(secrets::SecretsPut::logic))
+                .route("/{id}", actix_web::web::patch().to(secrets::SecretsPatch::logic))
+                .route("/{id}", actix_web::web::delete().to(secrets::SecretsDelete::logic))
+        );
     }
 }

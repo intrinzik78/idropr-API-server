@@ -5,6 +5,7 @@ pub trait ToVerificationStatus {
 }
 
 impl ToVerificationStatus for bool {
+    #[inline]
     fn to_verification_status(&self) -> VerificationStatus {
         match self {
             true  => VerificationStatus::Verified,

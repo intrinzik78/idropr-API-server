@@ -13,8 +13,7 @@ impl AuthorizationToken {
             .headers()
             .get("Authorization")
             .ok_or(Error::MissingAuthorizationBearerInHeader)?
-            .to_str()
-            .map_err(|_e| Error::MalformedAuthorizationToken)?;
+            .to_str()?;
     
         let token = {
             let str = AuthorizationToken::parse_token(str)

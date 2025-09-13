@@ -1,4 +1,4 @@
-use crate::types::SessionController;
+use crate::types::sessions::SessionController;
 
 #[derive(Debug)]
 pub enum SessionControllerStatus {

@@ -6,8 +6,8 @@ use rate_limit::{
 };
 
 use crate::{
-    enums::{Error, RateLimiterStatus, SessionControllerStatus, SystemFlag},
-    types::{AppState,Env, SessionController}
+    enums::{Error, RateLimiterStatus, sessions::SessionControllerStatus, SystemFlag},
+    types::{AppState,Env, sessions::SessionController}
 };
 
 type Result<T> = std::result::Result<T,Error>;
@@ -59,7 +59,7 @@ impl PrimaryCommand {
         let sessions = PrimaryCommand::build_session_controller(env);
 
         // initialize app state
-        let app_state = AppState::new(env)
+        let app_state = AppState::new()
             .await?
             .with_rate_limit_status(limiter)
             .with_session_status(sessions);
@@ -71,7 +71,7 @@ impl PrimaryCommand {
 
         println!("\nserver running in production mode\n");
         
-        let app_state = AppState::new(env)
+        let app_state = AppState::new()
             .await?
             .with_database_settings()
             .await?;
