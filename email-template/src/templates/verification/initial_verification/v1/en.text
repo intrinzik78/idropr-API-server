@@ -1,0 +1,9 @@
+Verify your email
+
+Tap this link to complete verification:
+{{verify_url}}
+
+If the link above doesn’t work, copy and paste it into your browser.
+
+For your security, the link expires in {{expire_minutes}}.
+If you didn’t request this, you can ignore this email.
