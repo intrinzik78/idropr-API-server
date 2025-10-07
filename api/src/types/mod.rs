@@ -1,9 +1,11 @@
+pub mod email;
 pub mod open_api_doc;
 pub mod permissions;
 pub mod users;
 pub mod secrets;
 pub mod sessions;
 
+mod api_error_data;
 mod authorization_token;
 mod api_response;
 mod api_server;
@@ -11,12 +13,11 @@ mod app_state;
 mod cli;
 mod env;
 mod header_settings;
-
 mod rate_limit_sweeper;
 mod route_collection;
-
 mod settings;
 
+pub use api_error_data::ApiErrorData;
 pub use authorization_token::AuthorizationToken;
 pub use api_response::ApiResponse;
 pub use api_server::ApiServer;

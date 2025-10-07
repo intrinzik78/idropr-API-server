@@ -2,7 +2,7 @@
 use actix_web::{web,Scope};
 
 use crate::{
-    api::{HealthCheck,sessions,secrets},
+    api::{HealthCheck,sessions,secrets,verifications},
     enums::Role,
     services::RouteLock,
     types::permissions::UserPermissions
@@ -19,6 +19,7 @@ impl RouteCollection {
             .configure(RouteCollection::health)
             .configure(RouteCollection::sessions)
             .configure(RouteCollection::secrets)
+            .configure(RouteCollection::email_verification)
     }
 }
 
@@ -55,6 +56,19 @@ impl RouteCollection {
     pub fn images(_cfg: &mut web::ServiceConfig) {
         todo!()
     }
+
+    /// email verification resource and endpoints
+    pub fn email_verification(cfg: &mut web::ServiceConfig) {
+        // let sysadmin = UserPermissions::from_role(Role::SysAdmin);
+
+        cfg.service(
+            actix_web::web::scope("/verifications")
+                // .wrap(RouteLock::default(&sysadmin))
+                .route("/email", web::post().to(verifications::email::CreateEmailVerification::response))
+                .route("/email/{uuid}/{id}", actix_web::web::patch().to(verifications::email::PatchEmailVerification::response))
+        );
+    }
+
 
     /// secrets resource and endpoings
     pub fn secrets(cfg: &mut web::ServiceConfig) {
