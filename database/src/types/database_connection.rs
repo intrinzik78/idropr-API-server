@@ -17,6 +17,7 @@ pub struct DatabaseConnection {
 impl DatabaseConnection {
     /// generates pem_cert for ssl server connection
     async fn pem_cert(path: &str) -> Result<Vec<u8>> {
+        println!("path");
         // buffer
         let mut pem_certificate: Vec<u8> = Vec::with_capacity(5192);
 
@@ -49,7 +50,6 @@ impl DatabaseConnection {
         let db_host = &env.db_host;
         let db_password = &env.db_password;
         let db_cert_path = &env.db_cert_path;
-        println!("{db_cert_path}");
         let pem_certificate = DatabaseConnection::pem_cert(db_cert_path).await?;
 
         // connection options

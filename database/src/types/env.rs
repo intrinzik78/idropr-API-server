@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug, path::PathBuf};
 
 use dotenv;
 
@@ -14,15 +14,30 @@ pub struct Env {
     pub db_host: String,            // ip address to host
 }
 
+impl Env {
+    fn workspace_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf()
+    }
+}
+
 impl Default for Env {
     fn default() -> Self {
+        let cwd = Self::workspace_root();
+
         // load values
         let env:HashMap<String,String> = dotenv::vars().collect();
 
         // extracts env vars
-        let db_cert_path = env.get("DB_CERT_PATH")
+        let db_cert_path_rel = env.get("DB_CERT_PATH")
             .expect("DB_CERT_PATH not found in .env")
             .to_owned();
+
+        let db_cert_path = cwd.join(db_cert_path_rel)
+            .to_str()
+            .expect("path to DB_CERT could not be created")
+            .to_string();
+
+        println!("{}",db_cert_path);
 
         let db_user = env.get("DB_USER")
             .expect("DB_USER not found in .env")
@@ -63,6 +78,8 @@ mod tests {
 
     #[actix_rt::test]
     async fn default_env_builder() {
+        let _env = Env::default();
+
         // manually construct Env, will fail on missing values
         let manual_env = Env {
             db_cert_path: String::from("db_cert_path"),
