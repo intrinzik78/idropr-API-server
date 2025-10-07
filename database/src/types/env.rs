@@ -37,8 +37,6 @@ impl Default for Env {
             .expect("path to DB_CERT could not be created")
             .to_string();
 
-        println!("{}",db_cert_path);
-
         let db_user = env.get("DB_USER")
             .expect("DB_USER not found in .env")
             .to_owned();
