@@ -16,7 +16,6 @@ blake3 = "1.8.2"
 chrono = "0.4.40"
 clap = { version = "4.5.43", features = ["derive"] }
 database = { path = "../database" }
-email-template = { path = "../email-template" }
 derive_more = { version = "1.0.0", features = ["from"] }
 dotenv = "0.15.0"
 email-template = { path = "../email-template"}
