@@ -18,7 +18,7 @@ pub struct PostmarkLog {
 }
 
 impl PostmarkLog {
-    pub async fn new(email_id: u64, status: SendStatus, postmark_response: &PostmarkResponse, database: &DatabaseConnection) -> Result<u64> {
+    pub async fn into_db(email_id: u64, status: SendStatus, postmark_response: &PostmarkResponse, database: &DatabaseConnection) -> Result<u64> {
         let status = status as u32;
         let code = postmark_response.error_code;
         let date: DateTime<Utc> = DateTime::from_str(&postmark_response.submitted_at)?;
