@@ -3,6 +3,7 @@ use std::num::NonZeroU8;
 use actix_web::{web::{Data, Json}, Responder};
 use database::types::DatabaseConnection;
 use email_template::{
+    enums::Locale,
     traits::EmailTemplate,
     types::{verification::InitialVerificationEmail, RenderedEmail}
 };
@@ -87,7 +88,7 @@ impl CreateEmailVerification {
         };
 
         // insert postmark log
-        let _insert_id = PostmarkLog::new(email_id, status.clone(), &postmark_response, database).await?;
+        let _insert_id = PostmarkLog::into_db(email_id, status.clone(), &postmark_response, database).await?;
 
         // return error response if present
         if status != SendStatus::Accepted {
@@ -119,12 +120,13 @@ impl CreateEmailVerification {
 
     /// build templated email
     pub fn build_email(verify_url: &'_ str, expire_minutes: u32) -> Result<RenderedEmail> {
+        let locale = Locale::Default;
         let template = InitialVerificationEmail {
             verify_url,
             expire_minutes
         };
 
-        Ok(template.render()?)
+        Ok(template.render(&locale)?)
     }
 
     /// main entry point

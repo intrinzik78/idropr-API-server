@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use mrml::prelude::render::RenderOptions;
 
@@ -97,6 +97,37 @@ impl RenderEngine {
         }
     }
 
+
+    /// defines the default render options for MRML
+    fn mrml_opts() -> RenderOptions {
+        RenderOptions {
+            disable_comments: true, // default is false, overriden here to remove comments from email templates
+            social_icon_origin: None,
+            fonts: HashMap::from([
+                (
+                    "Open Sans".into(),
+                    "https://fonts.googleapis.com/css?family=Open+Sans:300,400,500,700".into(),
+                ),
+                (
+                    "Droid Sans".into(),
+                    "https://fonts.googleapis.com/css?family=Droid+Sans:300,400,500,700".into(),
+                ),
+                (
+                    "Lato".into(),
+                    "https://fonts.googleapis.com/css?family=Lato:300,400,500,700".into(),
+                ),
+                (
+                    "Roboto".into(),
+                    "https://fonts.googleapis.com/css?family=Roboto:300,400,500,700".into(),
+                ),
+                (
+                    "Ubuntu".into(),
+                    "https://fonts.googleapis.com/css?family=Ubuntu:300,400,500,700".into(),
+                ),
+            ]),
+        }
+    }
+
     /// main entry point to render
     pub fn render(template: Template, locale: &Locale, vars: &BTreeMap<&str, String>) -> Result<RenderedEmail> {
         // load templates
@@ -104,16 +135,14 @@ impl RenderEngine {
         let text_string = Self::load_template(&template, locale, Extension::Text);
 
         // preprocess to verify strict handling of dynamic content
-        let pre_processed= Self::render_strict(&mjml_string, vars)?;
-        let text= Self::render_strict(&text_string, vars)?;
+        let pre_processed= Self::render_strict(mjml_string, vars)?;
+        let text= Self::render_strict(text_string, vars)?;
         
-        // define rendering options
-        let mut opts = RenderOptions::default();
-        opts.disable_comments = true;
+        // defines the MRML rendering options
+        let opts = Self::mrml_opts();
         
         // render mjml to html
-        let html = mrml::parse(&pre_processed)?
-            .render(&opts)?;
+        let html = mrml::parse(&pre_processed)?.render(&opts)?;
 
         Ok(RenderedEmail { html, text })
     }
