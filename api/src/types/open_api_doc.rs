@@ -2,14 +2,20 @@ use actix_web::HttpResponse;
 use utoipa::OpenApi;
 use crate::{
     api::sessions,
+    api::secrets,
+    api::verifications,
     types::ApiResponse
 };
 
 #[derive(OpenApi)]
 #[openapi(
-    info(title = "idropr-server", version = "0.0.6"),
+    info(title = "battle-texas-server", version = "0.0.6"),
     paths(
-        crate::api::sessions::sessions_openapi_spec::post_sessions,
+        sessions::sessions_openapi_spec::post_sessions,
+        sessions::sessions_openapi_spec::delete_sessions,
+        secrets::secrets_openapi_spec::post_secrets,
+        verifications::email::email_verifications_openapi_spec::post_email_verification,
+        verifications::email::email_verifications_openapi_spec::patch_email_verification,
         // add more endpoints here...
     ),
     components(schemas(
@@ -17,7 +23,11 @@ use crate::{
         sessions::AccessToken,
         ApiResponse<sessions::AccessToken>
     )),
-    tags((name="session", description="Session endpoints"))
+    tags(
+        (name="sessions", description="Session endpoints"),
+        (name="secrets", description="Secrets endpoints"),
+        (name="verifications", description="Verifications endpoints")
+    )
 )]
 pub struct ApiDoc;
 

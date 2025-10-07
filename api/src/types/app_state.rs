@@ -3,6 +3,8 @@ use database::{
     types::DatabaseConnection
 };
 
+use postmark::types::Postmark;
+
 use crate::{
     enums::{
         Error,
@@ -19,10 +21,11 @@ const DATABASE_SETTINGS_ID:i64 = 1;
 #[derive(Debug)]
 pub struct AppState {
     database: DatabaseConnection,
-    settings: Settings,
     limiter: RateLimiterStatus,
+    postmark: Postmark,
     secrets: SecretController,
     sessions: SessionControllerStatus,
+    settings: Settings
 }
 
 impl AppState {
@@ -34,6 +37,9 @@ impl AppState {
 
         // connect database
         let database = DatabaseConnection::new().await?;
+
+        // email service
+        let postmark = Postmark::default();
 
         // retreive encrypted api key sets
         let secrets = SecretController::new(settings.master_password.clone(), &database).await?;
@@ -47,9 +53,10 @@ impl AppState {
         // construct app state
         let app_state = AppState {
             database,
-            secrets,
             settings,
             limiter: RateLimiterStatus::Disabled,
+            postmark,
+            secrets,
             sessions: SessionControllerStatus::Disabled
         };
 
@@ -100,6 +107,11 @@ impl AppState {
         self
     }
 
+    // postmark email service getter
+    pub fn postmark(&self) -> &Postmark {
+        &self.postmark
+    }
+
     /// settings getter
     pub fn settings(&self) -> &Settings {
         &self.settings
@@ -130,6 +142,7 @@ mod tests {
         let server_port = env_vars.server_port;
         let database = DatabaseConnection::new().await.expect("failed to build database connection in app state test");
         let master_password = MasterPassword::Some(env.master_password);
+        let postmark = Postmark::default();
 
         let settings = Settings {
             load_email_queue_service: SystemFlag::Disabled,
@@ -148,6 +161,7 @@ mod tests {
         // manual build test
         let _manual_builder = AppState {
             database,
+            postmark,
             secrets,
             settings,
             limiter: RateLimiterStatus::Disabled,

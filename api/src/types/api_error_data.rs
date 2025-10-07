@@ -1,0 +1,8 @@
+use serde::Serialize;
+use utoipa::ToSchema;
+
+#[derive(Debug,Serialize,ToSchema)]
+pub struct ApiErrorData {
+    pub code: u16,
+    pub reason: String
+}
