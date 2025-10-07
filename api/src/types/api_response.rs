@@ -81,49 +81,69 @@ impl ApiResponse<()> {
         ApiResponse::<()>::default().ok()
     }
 
-    /// standard unauthorized response
+    /// standard unauthorized response - 401
     pub fn unauthorized() -> Self {
         ApiResponse::default()
             .with_code(401)
             .with_message("unauthorized".to_string())
     }
     
-    /// standard bad_request response
+    /// 400, bad request
     pub fn bad_request() -> Self {
         ApiResponse::default()
             .with_code(400)
             .with_message("bad request".to_string())
     }
 
-    /// standard forbidden response
+    /// 403, forbidden
     pub fn forbidden() -> Self {
         ApiResponse::default()
             .with_code(403)
             .with_message("forbidden".to_string())
     }
 
-    /// standard 404 / not found response
+    /// 410, gone
+    pub fn gone() -> Self {
+        ApiResponse::default()
+            .with_code(410)
+            .with_message("gone".to_string())
+    }
+
+
+    /// 404, not found
     pub fn not_found() -> Self {
         ApiResponse::default()
             .with_code(404)
             .with_message("not found".to_string())
     }
 
-    /// standard no-content response
-    pub fn no_content() -> Self {
-        ApiResponse::default()
-            .with_code(204)
-            .with_message("no content".to_string())
+    /// 204, success - no content
+    pub fn no_content() -> HttpResponse {
+        HttpResponse::NoContent().finish()
     }
 
-    /// standard rate-limited response
+    /// 201, success - resource created, no content
+    pub fn resource_created() -> Self {
+        ApiResponse::default()
+            .with_code(201)
+            .with_message("resource created".to_string())
+    }
+
+    /// 202, accepted, processing later, no immediate content
+    pub fn processing() -> Self {
+        ApiResponse::default()
+            .with_code(202)
+            .with_message("processing".to_string())
+    }
+
+    /// 429, rate limited
     pub fn rate_limited() -> Self {
         ApiResponse::default()
             .with_code(429)
             .with_message("too many requests".to_string())
     }
 
-    /// standard 500 server error response
+    /// 500, internal server error response
     pub fn server_error() -> Self {
         ApiResponse::default()
             .with_code(500)

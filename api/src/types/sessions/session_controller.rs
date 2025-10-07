@@ -19,7 +19,7 @@ impl GarbageCollector {
     /// accepts a locked shard and removes expired sessions
     pub fn sweep(&mut self, list: &RwLock<HashMap<[u8;16],Session>>) -> Result<()> {
         let time = Duration::from_millis(COLLECTION_TTL);
-        let stop_time = Instant::now().checked_add(time).ok_or(Error::DevError("couldn't create a time window to work in garbage collector".to_string()))?;
+        let stop_time = Instant::now().checked_add(time).ok_or(Error::SessionGarbageInstantFailed)?;
         let mut now = Instant::now();
         let mut sessions_to_remove: Vec<[u8;16]> = Vec::with_capacity(2048);
 
@@ -67,13 +67,14 @@ pub struct SessionController {
 
 impl SessionController {
 
+    /// getter
     pub fn hash_key(&self) -> &Uuid {
         &self.hash_key
     }
 
     /// blake 3 keyed hash for storage in database
     #[inline]
-    async fn hash_token(&self, token: &str) -> Result<blake3::Hash> {
+    fn hash_token(&self, token: &str) -> Result<blake3::Hash> {
         let uuid = match self.hash_key {
             Uuid::Crypto(buf) => buf,
             _ => return Err(Error::SessionTokenIncorrectType)
@@ -204,7 +205,7 @@ impl SessionController {
     /// refresh a token from the database
     pub async fn refresh(&self, token_b64: &str, database: &DatabaseConnection) -> Result<Permission> {
         // verify the session on the database
-        let keyed_hash = self.hash_token(token_b64).await?;
+        let keyed_hash = self.hash_token(token_b64)?;
         let verification_status = DatabaseSession::verify(&keyed_hash, database).await?;
 
         // decode from base64 extract key

@@ -3,14 +3,14 @@ use actix_web::{web,HttpRequest,Responder};
 use crate::{
     enums::sessions::SessionControllerStatus,
     traits::ToHeaderAuthToken,
-    types::{ApiResponse, AppState}
+    types::{permissions::WereChecked, ApiResponse, AppState}
 };
 
 #[derive(Debug)]
 pub struct SessionsDelete;
 
 impl SessionsDelete {
-    pub async fn logic(req: HttpRequest, shared: web::Data<AppState>) -> impl Responder {
+    pub async fn logic(_permissions: WereChecked, req: HttpRequest, shared: web::Data<AppState>) -> impl Responder {
 
         // extract token
         let token = match req.to_auth() {
@@ -26,7 +26,7 @@ impl SessionsDelete {
 
         // delete session
         match session_controller.delete(&token) {
-            Ok(_) => ApiResponse::success(),
+            Ok(()) => ApiResponse::no_content(),
             Err(_) => ApiResponse::server_error().error()
         }
     }

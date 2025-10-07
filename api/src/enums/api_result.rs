@@ -1,8 +1,9 @@
 use serde::Serialize;
+use utoipa::ToSchema;
 
 use crate::types::ApiResponse;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize,Debug,ToSchema)]
 pub enum ApiResult<T>
 where T: Serialize
 {

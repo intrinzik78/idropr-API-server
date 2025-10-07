@@ -1,8 +1,10 @@
 [workspace]
 members = [
     "api",
+    "email-template",
     "rate-limit",
-    "database"
+    "database",
+    "postmark",
 ]
 
 resolver = "3"
