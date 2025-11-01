@@ -78,8 +78,11 @@ pub enum Error {
     ToStrError(ToStrError),
 
     // interal server errors ↴
+    AccountStatusOutOfBounds,
     ApiPasswordOutOfBounds,             // api secret passwords must be: [0 < password < 32]
     ApiSecretsOutOfSyncWithDatabase,
+    AddressBuilderMissingData(String),
+    BusinessAccountNotFound(i64),
     CannotDecryptEmptyDataSet,          // attempted decryption on an empty data set
     CouldNotVerifyEncryptionSuccess,
     DatabaseConnection(String),         // failed database connection with the message passed back by the database itself
@@ -87,6 +90,7 @@ pub enum Error {
     DatabaseTransactionVerification,
     EmailVerificationExpired,
     EmptyStringWhereDataExpected,
+    LocationPriorityOutOfBounds,
     MalformedAuthorizationToken,        // authorization token did not 
     MasterPasswordNotProvided,          // secrets controller requires master password
     MissingAuthorizationBearerInHeader, // authorization bearer was not present during an authorization check

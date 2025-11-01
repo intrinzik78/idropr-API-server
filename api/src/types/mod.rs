@@ -1,3 +1,5 @@
+pub mod address;
+pub mod business;
 pub mod email;
 pub mod open_api_doc;
 pub mod permissions;
@@ -13,6 +15,7 @@ mod app_state;
 mod cli;
 mod env;
 mod header_settings;
+mod person;
 mod rate_limit_sweeper;
 mod route_collection;
 mod settings;
@@ -25,7 +28,7 @@ pub use app_state::AppState;
 pub use cli::Cli;
 pub use env::Env;
 pub use header_settings::HeaderSettings;
-
+pub use person::{NewPerson,Person};
 pub use rate_limit_sweeper::RateLimitSweeper;
 pub use route_collection::RouteCollection;
 pub use settings::Settings;
