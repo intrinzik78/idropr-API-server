@@ -3,17 +3,17 @@ use crate::enums::Error;
 #[repr(u8)]
 #[derive(Clone,Debug,PartialEq,Eq)]
 pub enum LocationPriority {
-    None  = 0,
-    Low   = 1,
-    Mid   = 2,
-    High  = 3,
+    Reduced     = 0,
+    Standard    = 1,
+    Mid         = 2,
+    High        = 3,
 }
 
 impl LocationPriority {
     pub fn from_u8(priority_id:u8) -> Result<Self,Error> {
         let priority = match priority_id {
-            0 => Self::None,
-            1 => Self::Low,
+            0 => Self::Reduced,
+            1 => Self::Standard,
             2 => Self::Mid,
             3 => Self::High,
             _ => return Err(Error::LocationPriorityOutOfBounds)
@@ -29,21 +29,26 @@ pub mod test {
 
     #[test]
     fn location_priority_range() {
-        let none = LocationPriority::None;
-        let low = LocationPriority::Low;
-        let mid = LocationPriority::Mid;
-        let high = LocationPriority::High;
+        type L = LocationPriority;
 
-        let none_test = LocationPriority::from_u8(0).unwrap();
-        let low_test = LocationPriority::from_u8(1).unwrap();
-        let mid_test = LocationPriority::from_u8(2).unwrap();
-        let high_test = LocationPriority::from_u8(3).unwrap();
-        let fail_test = LocationPriority::from_u8(4);
+        let reduced     = L::Reduced;
+        let standard    = L::Standard;
+        let mid         = L::Mid;
+        let high        = L::High;
 
-        assert_eq!(none,none_test);
-        assert_eq!(low,low_test);
+        let reduced_test =  L::from_u8(0).unwrap();
+        let standard_test = L::from_u8(1).unwrap();
+        let mid_test =      L::from_u8(2).unwrap();
+        let high_test =     L::from_u8(3).unwrap();
+
+        // positive assertions
+        assert_eq!(reduced,reduced_test);
+        assert_eq!(standard,standard_test);
         assert_eq!(mid,mid_test);
         assert_eq!(high,high_test);
+
+        // negative assertions
+        let fail_test = L::from_u8(4);
         assert!(fail_test.is_err());
     }
 }
