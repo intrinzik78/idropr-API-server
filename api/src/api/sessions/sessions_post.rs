@@ -33,12 +33,12 @@ impl SessionsPost {
 
     /// search for user by username first, then fallback to search by email
     async fn search_for_user(username: &str, database: &DatabaseConnection) -> Result<Option<User>> {
-        let user_opt = User::user_type_by_username(username, database).await?;
+        let username_opt = User::by_username(username, database).await?;
 
-        if user_opt.is_some() {
-            Ok(user_opt)
+        if username_opt.is_some() {
+            Ok(username_opt)
         } else {
-            let email_opt = User::user_type_by_email(username, database).await?;
+            let email_opt = User::by_email(username, database).await?;
             Ok(email_opt)
         }
     }

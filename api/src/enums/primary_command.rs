@@ -1,13 +1,14 @@
 /// simple command line arguments to load the correct environment vars
 use clap::Subcommand;
+use database::types::DatabaseConnection;
 use rate_limit::{
     enums::{TimeWindow,RefillRate},
     types::RateLimitBuilder
 };
 
 use crate::{
-    enums::{Error, RateLimiterStatus, sessions::SessionControllerStatus, SystemFlag},
-    types::{AppState,Env, sessions::SessionController}
+    enums::{Error, RateLimiterStatus, SystemFlag, sessions::SessionControllerStatus},
+    types::{AppState,Env, sessions::{SessionController, UserEpochController}}
 };
 
 type Result<T> = std::result::Result<T,Error>;
@@ -20,6 +21,7 @@ pub enum PrimaryCommand {
 
 impl PrimaryCommand {
 
+    /// builds the rate limiter
     fn build_rate_limiter(env: &Env) -> RateLimiterStatus {
         // settings
         let threads = env.server_threads;
@@ -42,12 +44,16 @@ impl PrimaryCommand {
         RateLimiterStatus::Enabled(Box::new(limiter))
     }
 
-    fn build_session_controller(env: &Env) -> SessionControllerStatus {
+    /// builds the session controller
+    async fn build_session_controller(env: &Env, connection: &DatabaseConnection) -> Result<SessionControllerStatus> {
+        
+        // pull and set the current user epoch from the database
         let capacity = env.sessions_initial_capacity;
         let threads = env.server_threads;
-        let session_controller = SessionController::new(capacity, threads);
+        let epoch_controller = UserEpochController::new(connection).await?;
+        let session_controller = SessionController::new(capacity,threads,epoch_controller);
 
-        SessionControllerStatus::Enabled(Box::new(session_controller))
+        Ok(SessionControllerStatus::Enabled(Box::new(session_controller)))
     }
 
     /// loads settings for local developement
@@ -55,8 +61,10 @@ impl PrimaryCommand {
 
         println!("\nwarning: server running in dev mode\n");
 
+        let connection = DatabaseConnection::new().await?;
+
         let limiter = PrimaryCommand::build_rate_limiter(env);
-        let sessions = PrimaryCommand::build_session_controller(env);
+        let sessions = PrimaryCommand::build_session_controller(env,&connection).await?;
 
         // initialize app state
         let app_state = AppState::new()
@@ -67,9 +75,12 @@ impl PrimaryCommand {
         Ok(app_state)
     }
 
+    /// loads settings for production environment
     pub async fn prod_state(env: &Env) -> Result<AppState> {
 
         println!("\nserver running in production mode\n");
+
+        let connection = DatabaseConnection::new().await?;
         
         let app_state = AppState::new()
             .await?
@@ -80,7 +91,7 @@ impl PrimaryCommand {
         let app_state = match app_state.settings().load_rate_limiter_service {
             SystemFlag::Enabled => {
                 let limiter = PrimaryCommand::build_rate_limiter(env);
-                let sessions = PrimaryCommand::build_session_controller(env);
+                let sessions = PrimaryCommand::build_session_controller(env,&connection).await?;
                 app_state
                     .with_rate_limit_status(limiter)
                     .with_session_status(sessions)

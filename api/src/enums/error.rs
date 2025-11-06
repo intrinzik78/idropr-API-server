@@ -98,11 +98,14 @@ pub enum Error {
     PemCertFileReadSizeMismatch,        // generated when the buffer size does not match the size returned from the file read
     PoisonedApiSecretsList,             // api secrets rwlock could not be locked for reading / writing
     PoisonedSessionList,                // session shard could not be locked
+    PoisonedUserEpoch,
     ServerCrash(String),                // generated if the HttpServer itself were to crash
     ServerModeOutOfRange,               // generated when the ToServerMode cannot match a database server mode value
     SessionHashNotVerified,             // could not verify the bcrypt hash with the user's token
     SessionGarbageInstantFailed,        // garbage collector couldn't create a new Instant during sweep startup
+    SessionLockNotAquired,
     SessionNotFoundDuringRefresh,       // generated when a token was marked stale, but then couldn't be retreived from the session map
+    SessionNotFoundDuringUpdate,
     SessionNotFoundInDatabase,          // could not find a linked session in the database during a refresh
     SessionTokenLengthTooLong,          // client has provided a session token longer than required
     SessionTokenLengthTooShort,         // client has provided a session token shorter than required
@@ -114,7 +117,11 @@ pub enum Error {
     SystemFlagOutOfRange,               // generated when the ToSystemFlag trait cannot match a database system flag value
     TooFewRowsUpdated,                  //
     TooManyRowsUpdated,                 // 
+    UnexpectedEmptyUserList,
+    UserEpochLockNotAquired,
+    UserEpochPoisoned,
     UserAccountStatusOutOfBounds,       // generated when ToUserAccountStatus cannot parse a value into a UserAccountStatus enum
+    UserIdNotInDatabase,
     UserTypeOutOfBounds,                // generated when a user type id (database) cannot be parsed into a user type
     VerificationEmailRejected,          // email was rejected by email sending service
     VerificationHashCheckFailed,

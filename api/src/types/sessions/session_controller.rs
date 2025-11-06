@@ -1,67 +1,31 @@
 use database::types::DatabaseConnection;
-use std::{collections::HashMap, hash::{DefaultHasher,Hash,Hasher}, sync::RwLock, time::{Duration,Instant}};
+use tokio::time::MissedTickBehavior;
+use std::{collections::{HashMap, hash_map::Entry}, hash::{DefaultHasher,Hash,Hasher}, sync::RwLock, time::{Duration, Instant}};
+
+use super::GarbageCollector;
 
 use crate::{
-    enums::{AuthContext, Error, ExpiredStatus, Permission, sessions::RefreshStatus, User, Uuid, VerificationStatus},
-    traits::{FromBase64, HasPermission, ToBase64, ToKeySet},
-    types::{sessions::DatabaseSession, sessions::KeySet, sessions::Session, permissions::{PermissionCheck,UserPermissions}}
+    enums::{AuthContext, Error, ExpiredStatus, Permission, UpdateStatus, User, Uuid, VerificationStatus, sessions::RefreshStatus},
+    traits::{FromBase64, HasPermission, ToBase64, ToJitter, ToKeySet, ToLockError},
+    types::{permissions::{PermissionCheck,UserPermissions}, sessions::{DatabaseSession, KeySet, Session, UserEpochController}}
 };
 
 type Result<T> = std::result::Result<T,Error>;
 
-const MAX_GARBAGE_COLLECTION:u64 = 60;     // 10 seconds
+/// garbage collection
+const MAX_GARBAGE_COLLECTION:u64 = 60;     // 60 seconds
+const BASE_GARBAGE_POLLING_TTL:u64 = 1;    // 1 seconds 
 const COLLECTION_TTL:u64 = 10;             // 10 miliseconds
 
-#[derive(Debug,Default)]
-struct GarbageCollector;
-
-impl GarbageCollector {
-    /// accepts a locked shard and removes expired sessions
-    pub fn sweep(&mut self, list: &RwLock<HashMap<[u8;16],Session>>) -> Result<()> {
-        let time = Duration::from_millis(COLLECTION_TTL);
-        let stop_time = Instant::now().checked_add(time).ok_or(Error::SessionGarbageInstantFailed)?;
-        let mut now = Instant::now();
-        let mut sessions_to_remove: Vec<[u8;16]> = Vec::with_capacity(2048);
-
-        // begin locked read scope
-        {
-            let locked_list = list.read().map_err(|_e| Error::PoisonedSessionList)?;
-            let mut list = locked_list.iter();
-
-            while let Some((key,session)) = list.next() {
-                if session.is_expired() == ExpiredStatus::Expired {
-                    sessions_to_remove.push(*key);
-                }
-
-                // qty and time cap
-                if sessions_to_remove.len() == 2048 || now > stop_time {
-                    break;
-                }
-
-                now = Instant::now();
-            }
-        }
-        // end locked read scope
-
-        // begin locked write scope
-        if !sessions_to_remove.is_empty() {
-            let mut locked_list = list.write().map_err(|_e| Error::PoisonedSessionList)?;
-
-            for k in sessions_to_remove {
-                locked_list.remove(&k);
-            }
-        }
-        // end locked write scope
-
-        Ok(())
-    }
-
-}
+/// epoch polling
+const BASE_POLLING_INTERVAL:u64 = 1;       // 1 second
+const MAX_POLLING_INTERVAL:u64 = 32;       // 32 seconds
 
 #[derive(Debug)]
 pub struct SessionController {
     list: Vec<RwLock<HashMap<[u8;16],Session>>>,
     garbage_collector: RwLock<GarbageCollector>,
+    user_epoch_controller: RwLock<UserEpochController>,
     hash_key: Uuid
 }
 
@@ -85,14 +49,86 @@ impl SessionController {
         Ok(hash)
     }
 
-    /// garbage collector interval
-    pub async fn watch(&self) {
-        // cannot be zero or it will run constantly with no delay
-        let mut interval = actix_rt::time::interval(Duration::from_secs(MAX_GARBAGE_COLLECTION));
+    /// epoch updater interval
+    pub async fn watch_epoch(&self, connection: &DatabaseConnection) {
+        let mut base = BASE_POLLING_INTERVAL;
+        let mut next_refresh = BASE_POLLING_INTERVAL.to_jitter();
         
+        let mut interval = actix_rt::time::interval(Duration::from_secs(BASE_POLLING_INTERVAL));
+        interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
         loop {
             interval.tick().await;
-            let _ = self.start_collector();
+            let now = Instant::now();
+            
+            if now > next_refresh {
+                
+                let update_status = self.update_user_epoch(connection).await.unwrap_or(UpdateStatus::None);
+                
+                match update_status {
+                    UpdateStatus::None => base = (base + 1).min(MAX_POLLING_INTERVAL),
+                    UpdateStatus::Update => base = BASE_POLLING_INTERVAL
+                }
+
+                next_refresh = base.to_jitter();
+            }
+        }
+    }
+
+    /// runs the epoch updater
+    pub async fn update_user_epoch(&self, connection: &DatabaseConnection) -> Result<UpdateStatus> {
+        // get latest master epoch from the database
+        let next_epoch = UserEpochController::next(connection).await?;
+
+        // get the current master epoch in memory
+        let current_epoch = self.user_epoch_controller
+            .try_read()
+            .to_lock_error()?
+            .current();
+
+        // update on new changes
+        if current_epoch < next_epoch {
+            let change_list = UserEpochController::change_list(current_epoch,connection).await?;
+
+            if change_list.is_empty() {
+                return Ok(UpdateStatus::None);
+            }
+
+            // begin write lock
+            {
+                let mut locked_list = self.user_epoch_controller.write().to_lock_error()?;
+                
+                for meta in change_list {
+                    locked_list.update(meta.user_id, meta.user_epoch);
+                }
+
+                locked_list.set_master_epoch(next_epoch);
+            }
+            // end write lock
+
+            return Ok(UpdateStatus::Update)
+        }
+        
+        Ok(UpdateStatus::None)
+    }
+
+    /// garbage collector interval
+    pub async fn watch_garbage(&self) {
+        let base = MAX_GARBAGE_COLLECTION;
+        let mut next_refresh = MAX_GARBAGE_COLLECTION.to_jitter();
+
+        let mut interval = actix_rt::time::interval(Duration::from_secs(BASE_GARBAGE_POLLING_TTL));
+        interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
+        loop {
+            interval.tick().await;
+            let now = Instant::now();
+            
+            if now > next_refresh {
+                let _ = self.start_collector();
+                next_refresh = base.to_jitter();
+            }
+            
         }
     }
 
@@ -100,10 +136,10 @@ impl SessionController {
     pub fn start_collector(&self) -> Result<()> {
 
         // begin write lock
-        let mut locked_collector = self.garbage_collector.write().map_err(|_e| Error::PoisonedSessionList)?;
+        let locked_collector = self.garbage_collector.read().map_err(|_e| Error::PoisonedSessionList)?;
 
         for shard in 0..self.list.len() {
-            locked_collector.sweep(&self.list[shard])?;
+            locked_collector.sweep(&self.list[shard],COLLECTION_TTL)?;
         }
         // end write lock
 
@@ -119,23 +155,23 @@ impl SessionController {
         let idx = self.idx(&key)?;
 
         // begin locked scope
-        let () = {
-            let mut locked_list = self.list[idx]
+        {
+            self.list[idx]
                 .write()
-                .map_err(|_e| Error::PoisonedSessionList)?;
-
-            locked_list.remove(&key);
-        };
+                .to_lock_error()?
+                .remove(&key);
+        }
         // end locked scope
         
         Ok(())
     }
 
     /// returns a new session controller
-    pub fn new(capacity: usize, threads: usize) -> Self {
+    pub fn new(capacity: usize, threads: usize, user_epoch_controller:UserEpochController) -> Self {
         let hash_key = Uuid::crypto32()
             .expect("could not create session hash key on startup");
         let garbage_collector = GarbageCollector;
+        let user_epoch_controller = RwLock::new(user_epoch_controller);
         
         // double check threads > 0
         let threads_checked = {
@@ -158,6 +194,7 @@ impl SessionController {
         Self {
             garbage_collector: RwLock::new(garbage_collector),
             list,
+            user_epoch_controller,
             hash_key
         }
     }
@@ -180,11 +217,9 @@ impl SessionController {
     
         // begin locked write scope
         {
-            let mut locked_list = self.list[idx]
-                .write()
-                .map_err(|_e| Error::PoisonedSessionList)?;
-            
-            let _ = locked_list.insert(*key, session);
+            self.list[idx].write()
+                .to_lock_error()?
+                .insert(*key, session);
         }
         // end locked write scope
 
@@ -202,6 +237,28 @@ impl SessionController {
         &self.list
     }
 
+    pub fn update_session_user(&self, key: &[u8; 16], user: User) -> Result<()> {
+
+        // derive shard id
+        let idx = self.idx(key)?;
+
+        // begin write lock scope
+        {
+            // get write lock
+            let mut locked_list = self.list[idx].write().to_lock_error()?;
+
+            // and insert updated user
+            match locked_list.entry(*key) {
+                Entry::Occupied(mut e) => { e.get_mut().user = user; }
+                Entry::Vacant(_) => return Err(Error::SessionNotFoundDuringUpdate)
+            }
+
+        }
+        // end write lock scope
+
+        Ok(())
+    }
+
     /// refresh a token from the database
     pub async fn refresh(&self, token_b64: &str, database: &DatabaseConnection) -> Result<Permission> {
         // verify the session on the database
@@ -212,6 +269,8 @@ impl SessionController {
         let key = token_b64
             .vec_from_base64_url()?
             .to_key()?;
+
+        // derive shard id
         let idx = self.idx(&key)?;
 
         // short circuit on verification failure
@@ -227,19 +286,61 @@ impl SessionController {
 
         // begin locked write scope
         {
-            let mut locked_list = self.list[idx].write().map_err(|_e| Error::PoisonedSessionList)?;
-            
-            if let Some(session) = locked_list.get_mut(&key) {
-                session.update_next_refresh();
-            } else {
-                return Err(Error::SessionNotFoundDuringRefresh);
-            }
+            self.list[idx]
+                .write()
+                .to_lock_error()?
+                .get_mut(&key)
+                .ok_or(Error::SessionNotFoundDuringRefresh)?
+                .update_next_refresh();
         }
         // end locked write scope
 
         Ok(Permission::Granted)
     }
 
+    pub async fn epoch_check(&self, token_b64: &str, database: &DatabaseConnection) -> Result<()> {
+        // decode from base64 to Vec<u8> and extract key segment
+        let key = token_b64
+            .vec_from_base64_url()?
+            .to_key()?;
+   
+        // derive shard id
+        let idx = self.idx(&key)?;
+        
+        // begin session lock scope
+        let user = {
+            self.list[idx]
+                .read()
+                .to_lock_error()?
+                .get(&key)
+                .ok_or(Error::SessionLockNotAquired)?
+                .user
+                .clone()
+        };
+        // end session lock scope
+
+        // extract user epoch data
+        let user_id = user.user_id();
+        let current_epoch = user.epoch();
+
+        let next_epoch = self.user_epoch_controller
+            .read()
+            .to_lock_error()?
+            .user_epoch(user_id)
+            .ok_or(Error::UserEpochLockNotAquired)?;
+
+        println!("{current_epoch},{next_epoch}");
+
+        if current_epoch < next_epoch {
+            match User::by_id(user_id, database).await? {
+                Some(user) => self.update_session_user(&key, user)?,
+                None => return Err(Error::UserIdNotInDatabase)
+            }
+        }
+
+        Ok(())
+    }
+    
     /// verify user has software access rights / permissions
     pub fn permission_check(&self, token_b64: &str, required_rights: UserPermissions) -> Result<PermissionCheck> {
         // decode from base64 to Vec<u8> and extract segments
@@ -253,16 +354,14 @@ impl SessionController {
             refresh_status: RefreshStatus::None,
             auth_context: AuthContext::None
         };
-                        
+
         // derive shard id
         let idx = self.idx(&key)?;
         
         // begin read lock scope
         {
             // get read lock
-            let locked_list = self.list[idx]
-                .read()  
-                .map_err(|_e| Error::PoisonedSessionList)?;
+            let locked_list = self.list[idx].read().to_lock_error()?;
 
             // and retrieve sesssion
             let session = match locked_list.get(&key) {
@@ -280,10 +379,11 @@ impl SessionController {
 
             // constant time hash check
             let verify_status = KeySet::verify(&key,&secret,&session.hash);
+            let user = &session.user;
 
             // authorization check
             if verify_status == VerificationStatus::Verified {
-                permission_check.permission = match &session.user {
+                permission_check.permission = match user {
                     User::Business(u) => u.permissions.has_permission(&required_rights),
                     User::Community(c) => c.permissions.has_permission(&required_rights),
                     User::System(s) => s.permissions.has_permission(&required_rights)
@@ -291,7 +391,7 @@ impl SessionController {
 
                 // set auth context on permissions granted
                 if permission_check.permission == Permission::Granted {
-                    let user = Box::new(session.user.clone());
+                    let user = Box::new(user.clone());
                     permission_check.auth_context = AuthContext::Some(user)
                 }
             }
@@ -306,14 +406,16 @@ impl Default for SessionController {
     fn default() -> Self {
         let default_map_capacity:usize = 1000;
         let threads:usize = 2;
+        let user_epoch_controller = UserEpochController::default();
         
-        Self::new(default_map_capacity, threads)
+        Self::new(default_map_capacity, threads, user_epoch_controller)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{enums::Resource, types::users::SystemUser};
+    use std::time::Instant;
 
     use super::*;
 
@@ -321,7 +423,8 @@ mod tests {
     #[test]
     fn collision_test() {
         let sessions_to_create = 1_000_000;
-        let controller = SessionController::new(sessions_to_create, 4);
+        let user_epoch_controller = UserEpochController::default();
+        let controller = SessionController::new(sessions_to_create, 4, user_epoch_controller);
 
         for _ in 0..sessions_to_create {
             let key_set = KeySet::new().unwrap();
@@ -360,7 +463,8 @@ mod tests {
     #[test]
     fn hash_decode_check() {
         let sessions_to_create = 1_000_000;
-        let controller = SessionController::new(sessions_to_create, 4);
+        let user_epoch_controller = UserEpochController::default();
+        let controller = SessionController::new(sessions_to_create, 4, user_epoch_controller);
         let r = Resource::Sessions;
         let permissions = UserPermissions::default().with_rw_self(r);
         let denied_permissions = UserPermissions::default().with_admin(r);
@@ -395,7 +499,8 @@ mod tests {
     #[test]
     fn session_delete() {
         let sessions_to_create = 1_000_000;
-        let controller = SessionController::new(sessions_to_create, 4);
+        let user_epoch_controller = UserEpochController::default();
+        let controller = SessionController::new(sessions_to_create, 4, user_epoch_controller);
         let key_set = KeySet::new().unwrap();
         let user = User::System(SystemUser{
             id: 0,
@@ -413,7 +518,8 @@ mod tests {
     #[test]
     fn garbage_collector() {
         let sessions_to_create = 1_000_000;
-        let controller = SessionController::new(sessions_to_create, 4);
+        let user_epoch_controller = UserEpochController::default();
+        let controller = SessionController::new(sessions_to_create, 4, user_epoch_controller);
 
         for _ in 0..sessions_to_create {
             let key_set = KeySet::new().unwrap();

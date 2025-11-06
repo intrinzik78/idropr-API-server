@@ -11,7 +11,7 @@ use clap::Parser;
 // internal types
 use {
     enums::{Error,PrimaryCommand},
-    types::{ApiServer,Cli,Env,RateLimitSweeper,RouteCollection,sessions::SessionSweeper}
+    types::{ApiServer,Cli,Env,RateLimitSweeper,RouteCollection,sessions::{SessionSweeper,UserEpochSync}}
 };
 
 type Result<T> = std::result::Result<T,Error>;
@@ -40,6 +40,7 @@ async fn main() -> Result<()> {
     {
         let () = SessionSweeper::run(&arc_state).await;
         let () = RateLimitSweeper::run(&arc_state).await;
+        let () = UserEpochSync::run(&arc_state).await;
     }
 
     // build and run server ↴

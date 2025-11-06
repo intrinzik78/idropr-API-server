@@ -54,22 +54,22 @@ impl User {
         }
     }
 
-    /// parses user_type_id to build the correct user type
-    async fn parse_user_type(record: &UserDatabaseHelper, database: &DatabaseConnection) -> Result<Option<User>> {
-            let user_id = record.user_id;
-            let user_type = record.user_type_id.to_user_type()?;
+    /// builds the user with a correct user type
+    async fn build(record: &UserDatabaseHelper, database: &DatabaseConnection) -> Result<Option<User>> {
+        let user_id = record.user_id;
+        let user_type = record.user_type_id.to_user_type()?;
 
-            let user = match user_type {
-                UserType::Business => Self::business_user(user_id,database).await?,
-                UserType::Community => Self::community_user(user_id,database).await?,
-                UserType::System => Self::system_user(user_id,database).await?,
-            };
+        let user = match user_type {
+            UserType::Business => Self::business_user(user_id,database).await?,
+            UserType::Community => Self::community_user(user_id,database).await?,
+            UserType::System => Self::system_user(user_id,database).await?,
+        };
 
-            Ok(user)
+        Ok(user)
     }
 
     /// try to get user by username, on fail try UserDatabaseHelper::by_email
-    pub async fn user_type_by_username(username: &str, database: &DatabaseConnection) -> Result<Option<User>> {
+    pub async fn by_username(username: &str, database: &DatabaseConnection) -> Result<Option<User>> {
         let sql = "SELECT user_id,user_type_id FROM `user` JOIN `username` ON user.id = username.user_id WHERE username.username = ?";
         let helper_opt:Option<UserDatabaseHelper> = sqlx::query_as(sql)
             .bind(username)
@@ -77,14 +77,14 @@ impl User {
             .await?;
 
         if let Some(record) = helper_opt {
-            Self::parse_user_type(&record,database).await
+            Self::build(&record,database).await
         } else {
             Ok(None)
         }
     }
 
-    /// try to get user by user's email
-    pub async fn user_type_by_email(email: &str, database: &DatabaseConnection) -> Result<Option<User>> {
+    /// try to get optional user by user's email
+    pub async fn by_email(email: &str, database: &DatabaseConnection) -> Result<Option<User>> {
         let sql = "SELECT user.id as user_id, user_type_id FROM `user` JOIN `person` ON person.id = user.id WHERE person.email = ?";
         let helper_opt:Option<UserDatabaseHelper> = sqlx::query_as(sql)
             .bind(email)
@@ -92,10 +92,41 @@ impl User {
             .await?;
 
         if let Some(record) = helper_opt {
-            Self::parse_user_type(&record,database).await
+            Self::build(&record,database).await
         } else {
             Ok(None)
         }
+    }
+
+    /// try to get existing user by user_id, error on row not found
+    pub async fn by_id(id: i64, database: &DatabaseConnection) -> Result<Option<User>> {
+        let sql = "SELECT id AS user_id, user_type_id FROM `user` WHERE user.id = ? LIMIT 1";
+        let record:UserDatabaseHelper = sqlx::query_as(sql)
+            .bind(id)
+            .fetch_one(&database.pool)
+            .await?;
+
+        Self::build(&record,database).await
+    }
+
+    pub async fn list_by_id(id_list:Vec<(i64,i8)>, connection: &DatabaseConnection) -> Result<Vec<User>> {
+        let mut user_list: Vec<User> = Vec::new();
+
+        for (user_id,user_type_id) in id_list {
+            let user_type = user_type_id.to_user_type()?;
+            
+            let user_opt = match user_type {
+                UserType::Business => Self::business_user(user_id,connection).await?,
+                UserType::Community => Self::community_user(user_id,connection).await?,
+                UserType::System => Self::system_user(user_id,connection).await?,
+            };
+
+            if let Some(user) = user_opt {
+                user_list.push(user);
+            }
+        }
+
+        Ok(user_list)
     }
 }
 
@@ -106,6 +137,14 @@ impl User {
             User::Business(b)   => b.id,
             User::Community(c) => c.id,
             User::System(s)       => s.id
+        }
+    }
+
+    pub fn epoch(&self) -> u64 {
+        match self {
+            User::Business(b)   => b.epoch,
+            User::Community(c) => c.epoch,
+            User::System(s)       => s.epoch
         }
     }
 }

@@ -55,32 +55,30 @@ pub struct RouteLockService<S> {
 }
 
 impl<S> RouteLockService<S> {
-    async fn logic(shared: Data<AppState>, token: &str, required_permissions: UserPermissions) -> PermissionCheck {
+    async fn logic(shared: Data<AppState>, token_b64: &str, required_permissions: UserPermissions) -> Result<PermissionCheck,crate::enums::Error> {
         let failed_check =  PermissionCheck { permission: Permission::Denied, auth_context: AuthContext::None, refresh_status: RefreshStatus::None };
+
+        // extract database from shared data
+        let database = shared.database();
 
         // extract rate limiter or return early if disabled
         let session_controller = match shared.sessions() {
             SessionControllerStatus::Enabled(sessions) => sessions,
-            SessionControllerStatus::Disabled => return failed_check
+            SessionControllerStatus::Disabled => return Ok(failed_check)
         };
+        
+        // compare the user epoch to the memory epoch and refresh if out-of-sync
+        let () = session_controller.epoch_check(token_b64, database).await?;
 
-        let mut permissions_check = match session_controller.permission_check(token, required_permissions) {
-            Ok(perm_check) => perm_check,
-            Err(_) => return failed_check
-        };
+        // run the full permission check on the memory session
+        let mut permissions_check = session_controller.permission_check(token_b64, required_permissions)?;
 
+        // verify the memory session against the database session if the session is stale
         if permissions_check.refresh_status == RefreshStatus::Refresh {
-            // extract database from shared data
-            let database = shared.database();
-
-            // retrieve session from database
-            permissions_check.permission = match session_controller.refresh(token, database).await {
-                Ok(permission) => permission,
-                Err(_e) => return failed_check
-            };
+            permissions_check.permission = session_controller.refresh(token_b64, database).await?;
         }
 
-        permissions_check
+        Ok(permissions_check)
     }
     
 }
@@ -113,12 +111,31 @@ where
             .ok_or(actix_web::error::ErrorUnauthorized("Unauthorized"));
 
         Box::pin(async move {
-            let token = token_res?;
+            // unwrap token
+            let token_b64 = token_res?;
+            
+            // unwrap shared data
             let shared = shared_res?;
             
-            let check = RouteLockService::<S>::logic(shared, &token, required_permissions).await;
+            // run permission check, unwrap or handle response
+            let check = match RouteLockService::<S>::logic(shared, &token_b64, required_permissions).await {
+                Ok(c) => c,
+                Err(_e) => {
+                    // log error here
+                    println!("{_e}");
+                    // return unauthorized response on check-error
+                    let res = req
+                        .into_response(HttpResponse::Unauthorized()
+                        .body("Unauthorized"))
+                        .map_into_right_body();
+                    
+                    return Ok(res)
+                }
+            };
 
+            // fail: short circuit, success: forward permissions and context to endpoint
             if check.permission  == Permission::Denied {
+                // short circuit on fail
                 let res = req
                     .into_response(HttpResponse::Unauthorized()
                     .body("Unauthorized"))
@@ -126,15 +143,18 @@ where
                 
                 return Ok(res)
             } else {
+                // forward context and permissions to enpdoint
                 req.extensions_mut().insert(NeedCheck(required_permissions));
                 req.extensions_mut().insert(check.auth_context);
             }
 
-            // build future
-            let res = service.call(req).await?;
+            // build future and map the response into the success body
+            let res = service.call(req)
+                .await?
+                .map_into_left_body();
 
             // map response into success branch
-            Ok(res.map_into_left_body())
+            Ok(res)
         })
     }
 }
