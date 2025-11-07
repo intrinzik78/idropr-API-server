@@ -13,18 +13,18 @@ use crate::{
 type Result<T> = std::result::Result<T,Error>;
 
 /// garbage collection
-const MAX_GARBAGE_COLLECTION:u64 = 60;     // 60 seconds
-const BASE_GARBAGE_POLLING_TTL:u64 = 1;    // 1 seconds 
-const COLLECTION_TTL:u64 = 10;             // 10 miliseconds
+const BASE_GARBAGE_POLLING_TTL:u64 = 10;     // 10 seconds 
+const MAX_GARBAGE_COLLECTION:u64   = 600;    // 10 minutes as seconds
+const COLLECTION_TTL:u64 = 10;               // 10 miliseconds
 
 /// epoch polling
-const BASE_POLLING_INTERVAL:u64 = 1;       // 1 second
-const MAX_POLLING_INTERVAL:u64 = 32;       // 32 seconds
+const BASE_POLLING_INTERVAL:u64 = 250;     // 250 milliseconds
+const MAX_POLLING_INTERVAL:u64  = 32_000;  // 32 seconds as milliseconds
 
 #[derive(Debug)]
 pub struct SessionController {
     list: Vec<RwLock<HashMap<[u8;16],Session>>>,
-    garbage_collector: RwLock<GarbageCollector>,
+    garbage_collector: GarbageCollector,
     user_epoch_controller: RwLock<UserEpochController>,
     hash_key: Uuid
 }
@@ -52,31 +52,36 @@ impl SessionController {
     /// epoch updater interval
     pub async fn watch_epoch(&self, connection: &DatabaseConnection) {
         let mut base = BASE_POLLING_INTERVAL;
-        let mut next_refresh = BASE_POLLING_INTERVAL.to_jitter();
+        let mut next_refresh = BASE_POLLING_INTERVAL.to_jitter_millis();
         
-        let mut interval = actix_rt::time::interval(Duration::from_secs(BASE_POLLING_INTERVAL));
+        // set tick interval to minimum time
+        let mut interval = actix_rt::time::interval(Duration::from_millis(BASE_POLLING_INTERVAL));
         interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         loop {
+            // sleep
             interval.tick().await;
+
+            // get current Instant
             let now = Instant::now();
             
+            // compare and run updater
             if now > next_refresh {
-                
                 let update_status = self.update_user_epoch(connection).await.unwrap_or(UpdateStatus::None);
                 
+                // adjust the updater interval to back off or heat up
                 match update_status {
-                    UpdateStatus::None => base = (base + 1).min(MAX_POLLING_INTERVAL),
+                    UpdateStatus::None => base = (base + 500).min(MAX_POLLING_INTERVAL),
                     UpdateStatus::Update => base = BASE_POLLING_INTERVAL
                 }
 
-                next_refresh = base.to_jitter();
+                next_refresh = base.to_jitter_millis();
             }
         }
     }
 
     /// runs the epoch updater
-    pub async fn update_user_epoch(&self, connection: &DatabaseConnection) -> Result<UpdateStatus> {
+    async fn update_user_epoch(&self, connection: &DatabaseConnection) -> Result<UpdateStatus> {
         // get latest master epoch from the database
         let next_epoch = UserEpochController::next(connection).await?;
 
@@ -114,36 +119,62 @@ impl SessionController {
 
     /// garbage collector interval
     pub async fn watch_garbage(&self) {
-        let base = MAX_GARBAGE_COLLECTION;
-        let mut next_refresh = MAX_GARBAGE_COLLECTION.to_jitter();
+        let mut base = BASE_GARBAGE_POLLING_TTL;
+        let mut next_refresh = BASE_GARBAGE_POLLING_TTL.to_jitter_secs();
 
+        // set tick interval to minimum time
         let mut interval = actix_rt::time::interval(Duration::from_secs(BASE_GARBAGE_POLLING_TTL));
         interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         loop {
             interval.tick().await;
+
+            // get current time
             let now = Instant::now();
             
+            // compare and run collection
             if now > next_refresh {
-                let _ = self.start_collector();
-                next_refresh = base.to_jitter();
+
+                // run collector and report errors
+                let update_status = match self.start_garbage_collector() {
+                    Ok(s) => s,
+                    Err(e) => {
+                        // log error here
+                        println!("{e}");
+
+                        UpdateStatus::None
+                    }
+                };
+
+                // adjust the updater interval to back off or heat up
+                match update_status {
+                    UpdateStatus::None => base = (base + 1_000).min(MAX_GARBAGE_COLLECTION),
+                    UpdateStatus::Update => base = BASE_GARBAGE_POLLING_TTL
+                }
+
+                next_refresh = base.to_jitter_secs()
             }
             
         }
     }
 
     /// runs a garbage collection sweep to remove expired sessions
-    pub fn start_collector(&self) -> Result<()> {
+    fn start_garbage_collector(&self) -> Result<UpdateStatus> {
+        let mut update_flag = UpdateStatus::None;
 
         // begin write lock
-        let locked_collector = self.garbage_collector.read().map_err(|_e| Error::PoisonedSessionList)?;
+        let collector = &self.garbage_collector;
 
+        // sweep shards
         for shard in 0..self.list.len() {
-            locked_collector.sweep(&self.list[shard],COLLECTION_TTL)?;
+            match collector.sweep(&self.list[shard],COLLECTION_TTL)? {
+                UpdateStatus::None => {},
+                UpdateStatus::Update => update_flag = UpdateStatus::Update
+            }
         }
         // end write lock
 
-        Ok(())
+        Ok(update_flag)
     }
 
     /// deletes session from controller
@@ -192,7 +223,7 @@ impl SessionController {
         }
 
         Self {
-            garbage_collector: RwLock::new(garbage_collector),
+            garbage_collector,
             list,
             user_epoch_controller,
             hash_key
@@ -298,6 +329,7 @@ impl SessionController {
         Ok(Permission::Granted)
     }
 
+    /// verifies the current user data stored in memory is fresh, runs before a permission check
     pub async fn epoch_check(&self, token_b64: &str, database: &DatabaseConnection) -> Result<()> {
         // decode from base64 to Vec<u8> and extract key segment
         let key = token_b64
@@ -323,14 +355,14 @@ impl SessionController {
         let user_id = user.user_id();
         let current_epoch = user.epoch();
 
+        // extract the updated epoch from the epoch controller
         let next_epoch = self.user_epoch_controller
             .read()
             .to_lock_error()?
             .user_epoch(user_id)
             .ok_or(Error::UserEpochLockNotAquired)?;
 
-        println!("{current_epoch},{next_epoch}");
-
+        // compare epochs
         if current_epoch < next_epoch {
             match User::by_id(user_id, database).await? {
                 Some(user) => self.update_session_user(&key, user)?,
@@ -540,7 +572,7 @@ mod tests {
             let _token = controller.insert(session, &key_set).unwrap();
         }
 
-        let _a = match controller.start_collector() {
+        let _a = match controller.start_garbage_collector() {
             Ok(_) => println!("ok"),
             Err(e) => println!("FAIL {:?}",e)
         };
