@@ -5,7 +5,7 @@ use std::{collections::{HashMap, hash_map::Entry}, hash::{DefaultHasher,Hash,Has
 use super::GarbageCollector;
 
 use crate::{
-    enums::{AuthContext, Error, ExpiredStatus, Permission, UpdateStatus, User, Uuid, VerificationStatus, sessions::RefreshStatus},
+    enums::{AuthContext, Error, ExpiredStatus, Permission, UpdateStatus, User, UserAccountStatus, Uuid, VerificationStatus, sessions::RefreshStatus},
     traits::{FromBase64, HasPermission, ToBase64, ToJitter, ToKeySet, ToLockError},
     types::{permissions::{PermissionCheck,UserPermissions}, sessions::{DatabaseSession, KeySet, Session, UserEpochController}}
 };
@@ -352,7 +352,7 @@ impl SessionController {
         // end session lock scope
 
         // extract user epoch data
-        let user_id = user.user_id();
+        let user_id = user.id();
         let current_epoch = user.epoch();
 
         // extract the updated epoch from the epoch controller
@@ -364,7 +364,7 @@ impl SessionController {
 
         // compare epochs
         if current_epoch < next_epoch {
-            match User::by_id(user_id, database).await? {
+            match User::by_id_unchecked(user_id, database).await? {
                 Some(user) => self.update_session_user(&key, user)?,
                 None => return Err(Error::UserIdNotInDatabase)
             }
@@ -391,19 +391,21 @@ impl SessionController {
         let idx = self.idx(&key)?;
         
         // begin read lock scope
-        {
+        let user = {
             // get read lock
             let locked_list = self.list[idx].read().to_lock_error()?;
 
             // and retrieve sesssion
-            let session = match locked_list.get(&key) {
-                Some(s) => s,
-                None => return Ok(permission_check)
-            };
+            let session = locked_list.get(&key).ok_or(Error::SessionNotFound)?;
             
-            // check if it's expired and deny if it is
-            if session.is_expired() == ExpiredStatus::Expired {
-                return Ok(permission_check);
+            // exhaustive check on whether session is expired
+            if matches!(session.is_expired(), ExpiredStatus::Expired) {
+                return Err(Error::SessionExpired)
+            }
+
+            // verify user account is enabled
+            if !matches!(session.user.status(), UserAccountStatus::Enabled) {
+                return Err(Error::UserAccountStatusNotEnabled)
             }
 
             // set refresh status flag
@@ -411,24 +413,27 @@ impl SessionController {
 
             // constant time hash check
             let verify_status = KeySet::verify(&key,&secret,&session.hash);
-            let user = &session.user;
 
-            // authorization check
-            if verify_status == VerificationStatus::Verified {
-                permission_check.permission = match user {
-                    User::Business(u) => u.permissions.has_permission(&required_rights),
-                    User::Community(c) => c.permissions.has_permission(&required_rights),
-                    User::System(s) => s.permissions.has_permission(&required_rights)
-                };
-
-                // set auth context on permissions granted
-                if permission_check.permission == Permission::Granted {
-                    let user = Box::new(user.clone());
-                    permission_check.auth_context = AuthContext::Some(user)
-                }
+            // short circuit if verification failed
+            if verify_status == VerificationStatus::Unverified {
+                return Err(Error::SessionHashNotVerified)
             }
-        }
+            
+            // copy out user data
+            session.user.clone()
+        };
         // end read lock scope
+
+        // run user permission check
+        permission_check.permission = user
+            .permissions()
+            .has_permission(&required_rights);
+
+        // set auth context on permissions granted
+        if permission_check.permission == Permission::Granted {
+            let box_user = Box::new(user.clone());
+            permission_check.auth_context = AuthContext::Some(box_user)
+        }
 
         Ok(permission_check)
     }
@@ -446,7 +451,7 @@ impl Default for SessionController {
 
 #[cfg(test)]
 mod tests {
-    use crate::{enums::Resource, types::users::SystemUser};
+    use crate::{enums::{Resource, UserType}, types::users::Builder};
     use std::time::Instant;
 
     use super::*;
@@ -460,14 +465,18 @@ mod tests {
 
         for _ in 0..sessions_to_create {
             let key_set = KeySet::new().unwrap();
-            let user = User::System(SystemUser{
-                id: 0,
-                epoch: 0,
-                username: String::from("username"),
-                hash: String::from("hash"),
-                status: crate::enums::UserAccountStatus::Enabled,
-                permissions: UserPermissions::default()
-            });
+            let user = Builder::new()
+                .id(0)
+                .business_account_id(1)
+                .epoch(0)
+                .username(String::from("username"))
+                .hash(String::from("hash"))
+                .user_type(UserType::Business)
+                .user_status(crate::enums::UserAccountStatus::Enabled)
+                .permissions(UserPermissions::default())
+                .build()
+                .unwrap();
+
             let session = Session::new(&key_set,user);
             let _token = controller.insert(session, &key_set).unwrap();
         }
@@ -500,14 +509,17 @@ mod tests {
         let r = Resource::Sessions;
         let permissions = UserPermissions::default().with_rw_self(r);
         let denied_permissions = UserPermissions::default().with_admin(r);
-        let user = User::System(SystemUser{
-            id: 0,
-            epoch: 0,
-            username: String::from("username"),
-            hash: String::from("hash"),
-            status: crate::enums::UserAccountStatus::Enabled,
-            permissions: permissions.clone()
-        });
+        let user = Builder::new()
+            .id(0)
+            .business_account_id(1)
+            .epoch(0)
+            .username(String::from("username"))
+            .hash(String::from("hash"))
+            .user_type(UserType::Business)
+            .user_status(crate::enums::UserAccountStatus::Enabled)
+            .permissions(permissions)
+            .build()
+            .unwrap();
 
         for _ in 0..sessions_to_create {
             let key_set = KeySet::new().unwrap();
@@ -534,14 +546,18 @@ mod tests {
         let user_epoch_controller = UserEpochController::default();
         let controller = SessionController::new(sessions_to_create, 4, user_epoch_controller);
         let key_set = KeySet::new().unwrap();
-        let user = User::System(SystemUser{
-            id: 0,
-            epoch: 0_u64,
-            username: String::from("username"),
-            hash: String::from("hash"),
-            status: crate::enums::UserAccountStatus::Enabled,
-            permissions: UserPermissions::default()
-        });
+        let user = Builder::new()
+            .id(0)
+            .business_account_id(1)
+            .epoch(0)
+            .username(String::from("username"))
+            .hash(String::from("hash"))
+            .user_type(UserType::Business)
+            .user_status(crate::enums::UserAccountStatus::Enabled)
+            .permissions(UserPermissions::default())
+            .build()
+            .unwrap();
+
         let session = Session::new(&key_set,user);
         let _token = controller.insert(session, &key_set).unwrap();
     }
@@ -555,14 +571,17 @@ mod tests {
 
         for _ in 0..sessions_to_create {
             let key_set = KeySet::new().unwrap();
-            let user = User::System(SystemUser{
-                id: 0,
-                epoch: 0_u64,
-                username: String::from("username"),
-                hash: String::from("hash"),
-                status: crate::enums::UserAccountStatus::Enabled,
-                permissions: UserPermissions::default()
-            });
+            let user = Builder::new()
+                .id(0)
+                .business_account_id(1)
+                .epoch(0)
+                .username(String::from("username"))
+                .hash(String::from("hash"))
+                .user_type(UserType::Business)
+                .user_status(crate::enums::UserAccountStatus::Enabled)
+                .permissions(UserPermissions::default())
+                .build()
+                .unwrap();
 
             let mut session = Session::new(&key_set,user);
             session.next_refresh = Instant::now().checked_sub(Duration::from_secs(60 * 60 * 24 * 10)).unwrap();
