@@ -1,6 +1,5 @@
 use actix_web::{web,Responder};
 use blake3;
-use database::types::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -31,18 +30,6 @@ pub struct SessionsPost;
 
 impl SessionsPost {
 
-    /// search for user by username first, then fallback to search by email
-    async fn search_for_user(username: &str, database: &DatabaseConnection) -> Result<Option<User>> {
-        let username_opt = User::by_username(username, database).await?;
-
-        if username_opt.is_some() {
-            Ok(username_opt)
-        } else {
-            let email_opt = User::by_email(username, database).await?;
-            Ok(email_opt)
-        }
-    }
-
     /// blake 3 keyed hash for storage in database
     #[inline]
     fn hash_token(token: &str, uuid: Uuid) -> Result<blake3::Hash> {
@@ -63,7 +50,7 @@ impl SessionsPost {
 
         // extract user from database
         let user =  {
-            match SessionsPost::search_for_user(&post.username, database).await {
+            match User::get_enabled_user(&post.username, database).await {
                 Ok(user_opt) => {
                     if let Some(user) = user_opt {
                         user
@@ -71,8 +58,9 @@ impl SessionsPost {
                         return ApiResponse::unauthorized().error();
                     }
                 },
-                Err(_e) => {
+                Err(e) => {
                     // log here
+                    println!("{e}");
                     return ApiResponse::unauthorized().error();
                 }
             }
@@ -99,7 +87,7 @@ impl SessionsPost {
         };
 
         // extract user_id for use in database session
-        let user_id = user.user_id();
+        let user_id = user.id();
 
         // create sync session
         let session = Session::new(&key_set, user);

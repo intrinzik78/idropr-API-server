@@ -152,17 +152,18 @@ impl Error {
         type E = Error;
 
         let data = match self {
-            E::DuplicateSecretNameExists        => ApiErrorData { code: 1000, reason: String::from("name already in use") },
-            E::EmailAlreadyVerified             => ApiErrorData { code: 1001, reason: String::from("email verified, no further action necessary") },
-            E::EmailIsSuppressed                => ApiErrorData { code: 1002, reason: String::from("email address is suppressed") },
-            E::RateLimitedEmailVerification     => ApiErrorData { code: 1003, reason: String::from("new verification requested too quickly") },
-            E::VerificationEmailRejected        => ApiErrorData { code: 1004, reason: String::from("email service rejected request") },
-            E::EmailVerificationExpired         => ApiErrorData { code: 1005, reason: String::from("verification link has expired") },
-            E::VerificationEmailNotFound        => ApiErrorData { code: 1006, reason: String::from("record does not exist") },
-            E::VerificationHashCheckFailed      => ApiErrorData { code: 1007, reason: String::from("verification failed") },
-            E::LocationRecordNotFoundById       => ApiErrorData { code: 1008, reason: String::from("record does not exist") },
-            E::InsufficientLocationPermissions  => ApiErrorData { code: 1009, reason: String::from("insufficient permissions on location resource") },
-            E::MissingLocationQueryParam(_)     => ApiErrorData { code: 1010, reason: String::from("missing location query parameter") },
+            E::DuplicateSecretNameExists       => ApiErrorData { code: 1000, reason: String::from("name already in use") },
+            E::EmailAlreadyVerified            => ApiErrorData { code: 1001, reason: String::from("email verified, no further action necessary") },
+            E::EmailIsSuppressed               => ApiErrorData { code: 1002, reason: String::from("email address is suppressed") },
+            E::RateLimitedEmailVerification    => ApiErrorData { code: 1003, reason: String::from("new verification requested too quickly") },
+            E::VerificationEmailRejected       => ApiErrorData { code: 1004, reason: String::from("email service rejected request") },
+            E::EmailVerificationExpired        => ApiErrorData { code: 1005, reason: String::from("verification link has expired") },
+            E::VerificationEmailNotFound       => ApiErrorData { code: 1006, reason: String::from("record does not exist") },
+            E::VerificationHashCheckFailed     => ApiErrorData { code: 1007, reason: String::from("verification failed") },
+            E::LocationRecordNotFoundById      => ApiErrorData { code: 1008, reason: String::from("record does not exist") },
+            E::InsufficientLocationPermissions => ApiErrorData { code: 1009, reason: String::from("insufficient permissions on location resource") },
+            E::MissingLocationQueryParam(_)    => ApiErrorData { code: 1010, reason: String::from("missing location query parameter") },
+            E::DatabaseTransactionVerification => ApiErrorData { code: 1011, reason: String::from("server error, data was not saved, try again") },
            _ => return None
         };
         

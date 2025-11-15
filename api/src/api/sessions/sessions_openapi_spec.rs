@@ -28,7 +28,12 @@ use super::sessions_delete::SessionsDelete;
             )
 
         ),
-        (status = 401, description = "Unauthorized", body=ApiResultError)
+        (
+            status = 401, description = "unauthorized",
+            content_type = "application/json",
+            body = ApiResultError,
+            example = json!({ "Error": { "code": 401, "message": "Unauthorized" } })
+        ),
     )
 )]
 
@@ -44,7 +49,12 @@ pub async fn post_sessions(post: web::Json<CreateSessionBody>, shared: web::Data
     security(("bearerAuth" = [])),
     responses(
         (status = 204, description = "no content"),
-        (status = 401, description = "Unauthorized", body=ApiResultError),
+        (
+            status = 401, description = "unauthorized",
+            content_type = "application/json",
+            body = ApiResultError,
+            example = json!({ "Error": { "code": 401, "message": "Unauthorized" } })
+        ),
         (status = 429, description = "rate limited",
             content_type = "application/json",
             body = ApiResultError,

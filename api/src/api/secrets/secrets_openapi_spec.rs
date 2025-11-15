@@ -16,7 +16,12 @@ use super::secrets_post::{SecretsPost,CreateSecretBody};
     request_body = CreateSecretBody,
     responses(
         (status = 201, description = "resource created"),
-        (status = 401, description = "Unauthorized"),
+        (
+            status = 401, description = "unauthorized",
+            content_type = "application/json",
+            body = ApiResultError,
+            example = json!({ "Error": { "code": 401, "message": "Unauthorized" } })
+        ),
         (
             status = 400,
             description = "bad request",
@@ -35,9 +40,9 @@ use super::secrets_post::{SecretsPost,CreateSecretBody};
             content_type = "application/json",
             body = ApiResultError,
             examples(
-                ("server_error" = (value = json!({ "Error": { "code": 500, "message":"server error"} })))
+                ("server_error" = (value = json!({ "Error": { "code": 500, "message":"server error"} }))),
+                ("server_error_with_data" = (value = json!({ "Error": { "code": 500, "message":"server error", "data":{ "code": 1011, "reason": "server error, data was not saved, try again"}} })))
             )
-
         ),
     )
 )]

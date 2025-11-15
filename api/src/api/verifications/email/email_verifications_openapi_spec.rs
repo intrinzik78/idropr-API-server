@@ -64,10 +64,11 @@ pub async fn post_email_verification(post: web::Json<EmailVerificationPost>, sha
             body = ApiResultError,
             example = json!({ "already_verified": { "code": 1001, "reason": "email verified, no further action necessary" } }),
         ),
-        (status = 401, description = "unauthorized",
+        (
+            status = 401, description = "unauthorized",
             content_type = "application/json",
             body = ApiResultError,
-            example = json!({"Error": {"code":1007,"reason":"verification failed"}})
+            example = json!({ "Error": { "code": 401, "message": "Unauthorized","data":{"code":1007,"reason":"verification failed"}} })
         ),
         (status = 410, description = "gone",
             content_type = "application/json",

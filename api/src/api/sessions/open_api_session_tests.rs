@@ -95,6 +95,33 @@ mod open_api_session_tests {
             "200 schema must be ApiResultToken"
         );
 
+        // 401 response schema -> ApiResultError
+        let unauth_schema_ref =
+            &resp["401"]["content"]["application/json"]["schema"]["$ref"];
+        assert_eq!(
+            unauth_schema_ref,
+            "#/components/schemas/ApiResultError",
+            "401 schema must be ApiResultError envelope"
+        );
+
+        // 401 example is enveloped Error with code 401 and message "Unauthorized"
+        let unauth_example =
+            &resp["401"]["content"]["application/json"]["example"]["Error"];
+        assert!(
+            unauth_example.is_object(),
+            "401 example must be an Error object"
+        );
+        assert_eq!(
+            unauth_example["code"],
+            401,
+            "401 Error.code must be 401"
+        );
+        assert_eq!(
+            unauth_example["message"],
+            "Unauthorized",
+            "401 Error.message must be 'Unauthorized'"
+        );
+
         // 429 example key present (global_rate_limit)
         let rl = &resp["429"]["content"]["application/json"]["examples"]["global_rate_limit"]["value"];
         assert!(
@@ -102,6 +129,7 @@ mod open_api_session_tests {
             "expected an example named 'global_rate_limit' under 429"
         );
     }
+
 
     #[test]
     fn delete_sessions_operation_basics() {

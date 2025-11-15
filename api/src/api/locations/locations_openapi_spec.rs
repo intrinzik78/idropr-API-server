@@ -25,7 +25,7 @@ use super::locations_get::{PublicLocation, PrivateLocation, GetReqPath, GetReqPa
             status = 401, description = "unauthorized",
             content_type = "application/json",
             body = ApiResultError,
-            example = json!({ "Error": { "code": 1007, "reason": "verification failed" } })
+            example = json!({ "Error": { "code": 401, "message": "Unauthorized" } })
         ),
         (
             status = 403, description = "forbidden",

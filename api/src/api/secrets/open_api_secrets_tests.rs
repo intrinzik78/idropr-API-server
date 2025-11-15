@@ -87,20 +87,65 @@ mod open_api_secrets_tests {
             "400 schema must be ApiResult_ApiResponse_String (ApiResult<ApiResponse<String>>)"
         );
 
-        // 429 has example 'global_rate_limit'
-        let rl = &resp["429"]["content"]["application/json"]["examples"]["global_rate_limit"]["value"];
+        // 401 should use ApiResultError and be enveloped in the example
+        let unauth_schema_ref =
+            &resp["401"]["content"]["application/json"]["schema"]["$ref"];
+        assert_eq!(
+            unauth_schema_ref,
+            "#/components/schemas/ApiResultError",
+            "401 schema must be ApiResultError envelope"
+        );
+
+        let unauth_example =
+            &resp["401"]["content"]["application/json"]["example"]["Error"];
+        assert!(
+            unauth_example.is_object(),
+            "401 example must be an Error object"
+        );
+        assert_eq!(
+            unauth_example["code"],
+            401,
+            "401 Error.code must be 401"
+        );
+        assert_eq!(
+            unauth_example["message"],
+            "Unauthorized",
+            "401 Error.message must be 'Unauthorized'"
+        );
+
+        // 429 should use ApiResultError and have example 'global_rate_limit'
+        let rl_schema_ref =
+            &resp["429"]["content"]["application/json"]["schema"]["$ref"];
+        assert_eq!(
+            rl_schema_ref,
+            "#/components/schemas/ApiResultError",
+            "429 schema must be ApiResultError envelope"
+        );
+
+        let rl =
+            &resp["429"]["content"]["application/json"]["examples"]["global_rate_limit"]["value"];
         assert!(
             rl.is_object(),
             "expected example 'global_rate_limit' under 429"
         );
 
-        // 500 has example 'server_error'
-        let se = &resp["500"]["content"]["application/json"]["examples"]["server_error"]["value"];
+        // 500 should use ApiResultError and have example 'server_error'
+        let se_schema_ref =
+            &resp["500"]["content"]["application/json"]["schema"]["$ref"];
+        assert_eq!(
+            se_schema_ref,
+            "#/components/schemas/ApiResultError",
+            "500 schema must be ApiResultError envelope"
+        );
+
+        let se =
+            &resp["500"]["content"]["application/json"]["examples"]["server_error"]["value"];
         assert!(
             se.is_object(),
             "expected example 'server_error' under 500"
         );
     }
+
 
     #[test]
     fn components_for_secrets_present() {
