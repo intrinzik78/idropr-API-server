@@ -118,19 +118,19 @@ mod open_api_session_tests {
             "public 429 should include example(s)");
     }
 
-#[test]
-fn wrappers_are_registered() {
-    let v = openapi_json();
-    let schemas = &v["components"]["schemas"];
-    for name in [
-        "ApiResultPublicLocation",
-        "ApiResultPrivateLocation",
-        "ApiResultPublicLocationsList", // <-- add this
-        "ApiResultError",
-    ] {
-        assert!(schemas.get(name).is_some(), "schema {name} missing");
+    #[test]
+    fn wrappers_are_registered() {
+        let v = openapi_json();
+        let schemas = &v["components"]["schemas"];
+        for name in [
+            "ApiResultPublicLocation",
+            "ApiResultPrivateLocation",
+            "ApiResultPublicLocationsList", // <-- add this
+            "ApiResultError",
+        ] {
+            assert!(schemas.get(name).is_some(), "schema {name} missing");
+        }
     }
-}
 
     #[test]
     fn locations_list_path_present() {
