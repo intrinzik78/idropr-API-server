@@ -1,7 +1,9 @@
+use serde::Serialize;
+
 use crate::enums::Error;
 
 #[repr(u8)]
-#[derive(Clone,Debug,PartialEq,Eq)]
+#[derive(Clone,Debug,PartialEq,Eq,Serialize)]
 pub enum LocationPriority {
     Reduced     = 0,
     Standard    = 1,

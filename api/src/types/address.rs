@@ -4,7 +4,7 @@ use sqlx::{MySql, Transaction, prelude::FromRow};
 
 type Result<T> = std::result::Result<T,Error>;
 
-#[derive(Debug,FromRow)]
+#[derive(Clone,Debug,FromRow)]
 pub struct Address {
     id: i64,
     address_1:String,

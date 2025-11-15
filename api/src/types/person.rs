@@ -62,7 +62,7 @@ impl Person {
             .bind(&new_person.l_name)
             .bind(&new_person.email)
             .bind(&new_person.phone)
-            .bind(&new_person.birthday)
+            .bind(new_person.birthday)
             .execute(&connection.pool)
             .await?
             .last_insert_id() as i64;
@@ -78,7 +78,7 @@ impl Person {
             .bind(&new_person.l_name)
             .bind(&new_person.email)
             .bind(&new_person.phone)
-            .bind(&new_person.birthday)
+            .bind(new_person.birthday)
             .execute(&mut **tx)
             .await?
             .last_insert_id() as i64;

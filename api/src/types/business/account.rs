@@ -1,6 +1,7 @@
 use crate::{
-    enums::{BusinessAccountStatus,Error},
-    types::{business::Location,Person}};
+    enums::BusinessAccountStatus,Error,
+    types::{Person, business::Location}
+};
 use database::types::DatabaseConnection;
 use sqlx::{MySql, Transaction, prelude::FromRow};
 
@@ -72,6 +73,7 @@ impl Account {
     }
 
     pub async fn users(&self) { todo!() }
+
 }
 
 #[derive(FromRow)]
