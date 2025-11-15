@@ -1,9 +1,9 @@
 use database::types::DatabaseConnection;
 use sqlx::prelude::FromRow;
 use crate::{
-    traits::ToUserType,
-    enums::{Error,UserType},
-    types::users::{BusinessUser,CommunityUser,SystemUser}
+    enums::{Error, UserAccountStatus, UserType},
+    traits::{ToUserType,User as UserTrait},
+    types::{permissions::UserPermissions, users::{BusinessUser, CommunityUser, SystemUser}}
 };
 
 type Result<T> = std::result::Result<T,Error>;
@@ -14,19 +14,23 @@ struct UserDatabaseHelper {
     user_type_id: i8
 }
 
+#[repr(i8)]
 #[derive(Clone,Debug,PartialEq)]
 pub enum User {
-    Business(BusinessUser),     // 0
-    Community(CommunityUser),   // 1
-    System(SystemUser),         // 2
+    Business(BusinessUser)      = 1,
+    Community(CommunityUser)    = 2,
+    System(SystemUser)          = 3 
 }
 
 // async
 impl User {
 
     /// builds a business user
-    async fn business_user(user_id: i64, database: &DatabaseConnection) -> Result<Option<User>> {
-        let user_opt = BusinessUser::by_id(user_id,database).await?;
+    async fn business_user(user_id: i64, account_status: Option<UserAccountStatus>, connection: &DatabaseConnection) -> Result<Option<User>> {
+        let user_opt = match account_status {
+            Some(status) =>  BusinessUser::by_id_checked(user_id,status,connection).await?,
+            None =>                             BusinessUser::by_id_unchecked(user_id,connection).await?
+        };
 
         match user_opt {
             Some(u) => Ok(Some(User::Business(u))),
@@ -35,8 +39,11 @@ impl User {
     }
 
     /// builds a community user
-    async fn community_user(user_id: i64, database: &DatabaseConnection) -> Result<Option<User>> {
-        let user_opt = CommunityUser::by_id(user_id,database).await?;
+    async fn community_user(user_id: i64, account_status: Option<UserAccountStatus>, database: &DatabaseConnection) -> Result<Option<User>> {
+        let user_opt = match account_status {
+            Some(status) =>  CommunityUser::by_id_checked(user_id,status,database).await?,
+            None =>                             CommunityUser::by_id_unchecked(user_id,database).await?
+        };
 
         match user_opt {
             Some(u) => Ok(Some(User::Community(u))),
@@ -45,8 +52,11 @@ impl User {
     }
 
     /// builds a system user
-    async fn system_user(user_id: i64, database: &DatabaseConnection) -> Result<Option<User>> {
-        let user_opt = SystemUser::by_id(user_id,database).await?;
+    async fn system_user(user_id: i64, account_status: Option<UserAccountStatus>, database: &DatabaseConnection) -> Result<Option<User>> {
+        let user_opt = match account_status {
+            Some(status) =>  SystemUser::by_id_checked(user_id,status,database).await?,
+            None =>                             SystemUser::by_id_unchecked(user_id,database).await?
+        };
 
         match user_opt {
             Some(u) => Ok(Some(User::System(u))),
@@ -55,70 +65,112 @@ impl User {
     }
 
     /// builds the user with a correct user type
-    async fn build(record: &UserDatabaseHelper, database: &DatabaseConnection) -> Result<Option<User>> {
+    async fn build(record: &UserDatabaseHelper, account_status:Option<UserAccountStatus>, database: &DatabaseConnection) -> Result<Option<User>> {
         let user_id = record.user_id;
         let user_type = record.user_type_id.to_user_type()?;
 
         let user = match user_type {
-            UserType::Business => Self::business_user(user_id,database).await?,
-            UserType::Community => Self::community_user(user_id,database).await?,
-            UserType::System => Self::system_user(user_id,database).await?,
+            UserType::Business  => Self::business_user(user_id,account_status,database).await?,
+            UserType::Community => Self::community_user(user_id,account_status,database).await?,
+            UserType::System    => Self::system_user(user_id,account_status,database).await?,
         };
 
         Ok(user)
     }
 
     /// try to get user by username, on fail try UserDatabaseHelper::by_email
-    pub async fn by_username(username: &str, database: &DatabaseConnection) -> Result<Option<User>> {
-        let sql = "SELECT user_id,user_type_id FROM `user` JOIN `username` ON user.id = username.user_id WHERE username.username = ?";
+    pub async fn get_enabled_user(username: &str, database: &DatabaseConnection) -> Result<Option<User>> {
+        let account_status = UserAccountStatus::Enabled;
+        let account_status_id = account_status as i8;
+        let sql = "(
+                            SELECT u.id AS user_id, u.user_type_id
+                            FROM person p
+                            JOIN user   u ON u.id = p.id
+                            WHERE p.email = ?
+                        )
+                        UNION ALL
+                        (
+                            SELECT u.id, u.user_type_id
+                            FROM username un
+                            JOIN user     u ON u.id = un.user_id
+                            WHERE un.username = ?
+                                AND NOT EXISTS (
+                                    SELECT 1
+                                    FROM person p2
+                                    WHERE p2.email = ?
+                                )
+                                AND u.user_status_id = ?
+                        )
+                        LIMIT 1";
         let helper_opt:Option<UserDatabaseHelper> = sqlx::query_as(sql)
             .bind(username)
+            .bind(username)
+            .bind(username)
+            .bind(account_status_id)
             .fetch_optional(&database.pool)
             .await?;
 
         if let Some(record) = helper_opt {
-            Self::build(&record,database).await
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// try to get optional user by user's email
-    pub async fn by_email(email: &str, database: &DatabaseConnection) -> Result<Option<User>> {
-        let sql = "SELECT user.id as user_id, user_type_id FROM `user` JOIN `person` ON person.id = user.id WHERE person.email = ?";
-        let helper_opt:Option<UserDatabaseHelper> = sqlx::query_as(sql)
-            .bind(email)
-            .fetch_optional(&database.pool)
-            .await?;
-
-        if let Some(record) = helper_opt {
-            Self::build(&record,database).await
+            Self::build(&record,Some(account_status),database).await
         } else {
             Ok(None)
         }
     }
 
     /// try to get existing user by user_id, error on row not found
-    pub async fn by_id(id: i64, database: &DatabaseConnection) -> Result<Option<User>> {
+    /// CAUTION: does not filter by user status, do not use in workflow that grants permissions
+    pub async fn by_id_unchecked(id: i64, database: &DatabaseConnection) -> Result<Option<User>> {
         let sql = "SELECT id AS user_id, user_type_id FROM `user` WHERE user.id = ? LIMIT 1";
         let record:UserDatabaseHelper = sqlx::query_as(sql)
             .bind(id)
             .fetch_one(&database.pool)
             .await?;
 
-        Self::build(&record,database).await
+        let account_status = None;
+
+        Self::build(&record,account_status,database).await
     }
 
-    pub async fn list_by_id(id_list:Vec<(i64,i8)>, connection: &DatabaseConnection) -> Result<Vec<User>> {
+    /// try to get existing user by user_id, error on row not found, filter by enabled status
+    pub async fn by_id_enabled(id: i64, database: &DatabaseConnection) -> Result<Option<User>> {
+        let account_status = UserAccountStatus::Enabled;
+        let account_status_id = account_status as i8;
+        let sql = "SELECT id AS user_id, user_type_id FROM `user` WHERE user.id = ? AND user.user_status_id = ? LIMIT 1";
+        let record:UserDatabaseHelper = sqlx::query_as(sql)
+            .bind(id)
+            .bind(account_status_id)
+            .fetch_one(&database.pool)
+            .await?;
+
+        Self::build(&record,Some(account_status),database).await
+    }
+
+    /// try to get existing user by user_id, error on row not found, filter by disabled status
+    pub async fn by_id_disabled(id: i64, database: &DatabaseConnection) -> Result<Option<User>> {
+        let account_status = UserAccountStatus::Disabled;
+        let account_status_id = account_status as i8;
+        let sql = "SELECT id AS user_id, user_type_id FROM `user` WHERE user.id = ? AND user.user_status_id = ? LIMIT 1";
+        let record:UserDatabaseHelper = sqlx::query_as(sql)
+            .bind(id)
+            .bind(account_status_id)
+            .fetch_one(&database.pool)
+            .await?;
+
+        Self::build(&record,Some(account_status),database).await
+    }
+
+    /// returns list of users regardless of UserAccountStatus
+    pub async fn list_by_id_unchecked(id_list:Vec<(i64,i8)>, connection: &DatabaseConnection) -> Result<Vec<User>> {
         let mut user_list: Vec<User> = Vec::new();
+        let account_status:Option<UserAccountStatus> = None;
 
         for (user_id,user_type_id) in id_list {
             let user_type = user_type_id.to_user_type()?;
             
             let user_opt = match user_type {
-                UserType::Business => Self::business_user(user_id,connection).await?,
-                UserType::Community => Self::community_user(user_id,connection).await?,
-                UserType::System => Self::system_user(user_id,connection).await?,
+                UserType::Business => Self::business_user(user_id,account_status,connection).await?,
+                UserType::Community => Self::community_user(user_id,account_status,connection).await?,
+                UserType::System => Self::system_user(user_id,account_status,connection).await?,
             };
 
             if let Some(user) = user_opt {
@@ -128,23 +180,83 @@ impl User {
 
         Ok(user_list)
     }
-}
 
-// sync
-impl User {
-    pub fn user_id(&self) -> i64 {
+   /// returns list of users filtered by UserAccountStatus
+    pub async fn list_by_id_checked(id_list:Vec<(i64,i8)>, account_status:UserAccountStatus, connection: &DatabaseConnection) -> Result<Vec<User>> {
+        let mut user_list: Vec<User> = Vec::new();
+        let account_status = Some(account_status);
+
+        for (user_id,user_type_id) in id_list {
+            let user_type = user_type_id.to_user_type()?;
+            
+            let user_opt = match user_type {
+                UserType::Business => Self::business_user(user_id,account_status,connection).await?,
+                UserType::Community => Self::community_user(user_id,account_status,connection).await?,
+                UserType::System => Self::system_user(user_id,account_status,connection).await?,
+            };
+
+            if let Some(user) = user_opt {
+                user_list.push(user);
+            }
+        }
+
+        Ok(user_list)
+    }
+
+    pub fn id(&self) -> i64 {
         match self {
-            User::Business(b)   => b.id,
-            User::Community(c) => c.id,
-            User::System(s)       => s.id
+            Self::Business(b) => b.id(),
+            Self::Community(c) => c.id(),
+            Self::System(s) => s.id()
         }
     }
 
     pub fn epoch(&self) -> u64 {
         match self {
-            User::Business(b)   => b.epoch,
-            User::Community(c) => c.epoch,
-            User::System(s)       => s.epoch
+            Self::Business(b)    => b.epoch(),
+            Self::Community(c)  => c.epoch(),
+            Self::System(s)        => s.epoch()
         }
     }
+
+    pub fn hash(&self) -> &str {
+        match self {
+            Self::Business(b)    => b.hash(),
+            Self::Community(c)  => c.hash(),
+            Self::System(s)        => s.hash()
+        }
+    }
+
+    pub fn permissions(&self) -> UserPermissions {
+        match self {
+            Self::Business(b)    => b.permissions(),
+            Self::Community(c)  => c.permissions(),
+            Self::System(s)        => s.permissions()
+        }
+    }
+
+    pub fn username(&self) -> &str {
+        match self {
+            Self::Business(b)    => b.username(),
+            Self::Community(c)  => c.username(),
+            Self::System(s)        => s.username()
+        }
+    }
+
+    pub fn user_type(&self) -> UserType {
+        match self {
+            Self::Business(b)    => b.user_type(),
+            Self::Community(c)  => c.user_type(),
+            Self::System(s)        => s.user_type()
+        }
+    }
+
+    pub fn status(&self) -> UserAccountStatus {
+        match self {
+            Self::Business(b)    => b.status(),
+            Self::Community(c)  => c.status(),
+            Self::System(s)        => s.status()
+        }
+    }
+
 }

@@ -1,3 +1,4 @@
+mod open_api_secrets_tests;
 mod secrets_delete;
 mod secrets_get;
 mod secrets_patch;

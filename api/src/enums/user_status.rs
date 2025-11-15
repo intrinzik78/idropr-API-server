@@ -1,9 +1,10 @@
-#[derive(Clone,Debug,PartialEq)]
+#[derive(Clone,Copy,Debug,PartialEq)]
+#[repr(i8)]
 pub enum UserAccountStatus {
-    Disabled,   // 0
-    Enabled,    // 1
-    Suspended,  // 2
-    Banned      // 3
+    Disabled    = 0,  // 0
+    Enabled     = 1,  // 1
+    Suspended   = 2,  // 2
+    Banned      = 3   // 3
 }
 
 #[cfg(test)]
@@ -12,7 +13,7 @@ pub mod test {
     use crate::traits::ToUserAccountStatus;
 
     #[test]
-    fn bouns_check() {
+    fn bounds_check() {
         type U = UserAccountStatus;
 
         let disabled = 0;

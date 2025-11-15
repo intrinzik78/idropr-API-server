@@ -1,3 +1,4 @@
+mod open_api_session_tests;
 mod sessions_delete;
 mod sessions_post;
 

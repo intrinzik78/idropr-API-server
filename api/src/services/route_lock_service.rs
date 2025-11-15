@@ -12,7 +12,7 @@ use std::task::{Context, Poll};
 
 use crate::{
     enums::{AuthContext, Permission, sessions::{RefreshStatus,SessionControllerStatus}},
-    types::{AppState, AuthorizationToken, permissions::{NeedCheck, PermissionCheck, UserPermissions}}
+    types::{ApiResponse, AppState, AuthorizationToken, permissions::{NeedCheck, PermissionCheck, UserPermissions}}
 };
 
 /// target for the middleware service
@@ -125,28 +125,30 @@ where
                     println!("{_e}");
                     // return unauthorized response on check-error
                     let res = req
-                        .into_response(HttpResponse::Unauthorized()
-                        .body("Unauthorized"))
+                        .into_response(ApiResponse::unauthorized().error())
                         .map_into_right_body();
                     
                     return Ok(res)
                 }
             };
 
-            // fail: short circuit, success: forward permissions and context to endpoint
-            if check.permission  == Permission::Denied {
-                // short circuit on fail
-                let res = req
-                    .into_response(HttpResponse::Unauthorized()
-                    .body("Unauthorized"))
-                    .map_into_right_body();
-                
-                return Ok(res)
-            } else {
-                // forward context and permissions to enpdoint
-                req.extensions_mut().insert(NeedCheck(required_permissions));
-                req.extensions_mut().insert(check.auth_context);
-            }
+            // match explicitly on check.permission
+            match check.permission {
+                Permission::Denied => {
+                    // short circuit on fail
+                    let res = req
+                        .into_response(HttpResponse::Unauthorized()
+                        .body("Unauthorized"))
+                        .map_into_right_body();
+                    
+                    return Ok(res)
+                },
+                Permission::Granted => {
+                    // forward context and permissions to enpdoint
+                    req.extensions_mut().insert(NeedCheck(required_permissions));
+                    req.extensions_mut().insert(check.auth_context);
+                }
+            };
 
             // build future and map the response into the success body
             let res = service.call(req)

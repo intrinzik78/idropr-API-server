@@ -90,20 +90,27 @@ pub enum Error {
     DatabaseTransactionVerification,
     EmailVerificationExpired,
     EmptyStringWhereDataExpected,
+    InsufficientLocationPermissions,
     LocationPriorityOutOfBounds,
+    LocationRecordNotFoundById,
     MalformedAuthorizationToken,        // authorization token did not 
     MasterPasswordNotProvided,          // secrets controller requires master password
     MissingAuthorizationBearerInHeader, // authorization bearer was not present during an authorization check
+    MissingUserInAuthContext,
+    MissingLocationQueryParam(String),  // generated when a query on a Location resource is missing a required get parameter
     NoApiRecordByThatName,
     PemCertFileReadSizeMismatch,        // generated when the buffer size does not match the size returned from the file read
     PoisonedApiSecretsList,             // api secrets rwlock could not be locked for reading / writing
     PoisonedSessionList,                // session shard could not be locked
     PoisonedUserEpoch,
+    RequiredUserBuildDataMissing,
     ServerCrash(String),                // generated if the HttpServer itself were to crash
     ServerModeOutOfRange,               // generated when the ToServerMode cannot match a database server mode value
     SessionHashNotVerified,             // could not verify the bcrypt hash with the user's token
     SessionGarbageInstantFailed,        // garbage collector couldn't create a new Instant during sweep startup
+    SessionExpired,
     SessionLockNotAquired,
+    SessionNotFound,
     SessionNotFoundDuringRefresh,       // generated when a token was marked stale, but then couldn't be retreived from the session map
     SessionNotFoundDuringUpdate,
     SessionNotFoundInDatabase,          // could not find a linked session in the database during a refresh
@@ -120,6 +127,7 @@ pub enum Error {
     UnexpectedEmptyUserList,
     UserEpochLockNotAquired,
     UserEpochPoisoned,
+    UserAccountStatusNotEnabled,
     UserAccountStatusOutOfBounds,       // generated when ToUserAccountStatus cannot parse a value into a UserAccountStatus enum
     UserIdNotInDatabase,
     UserTypeOutOfBounds,                // generated when a user type id (database) cannot be parsed into a user type
@@ -139,18 +147,22 @@ pub enum Error {
 }
 
 impl Error {
+    /// creates a front facing error message for public consumption
     pub fn to_api_error_message(&self) -> Option<ApiErrorData> {
         type E = Error;
 
         let data = match self {
-            E::DuplicateSecretNameExists    => ApiErrorData { code: 1000, reason: String::from("name already in use") },
-            E::EmailAlreadyVerified         => ApiErrorData { code: 1001, reason: String::from("email verified, no further action necessary") },
-            E::EmailIsSuppressed            => ApiErrorData { code: 1002, reason: String::from("email address is suppressed") },
-            E::RateLimitedEmailVerification => ApiErrorData { code: 1003, reason: String::from("new verification requested too quickly") },
-            E::VerificationEmailRejected    => ApiErrorData { code: 1004, reason: String::from("email service rejected request") },
-            E::EmailVerificationExpired     => ApiErrorData { code: 1005, reason: String::from("verification link has expired") },
-            E::VerificationEmailNotFound    => ApiErrorData { code: 1006, reason: String::from("record does not exist") },
-            E::VerificationHashCheckFailed  => ApiErrorData { code: 1007, reason: String::from("verification failed") },
+            E::DuplicateSecretNameExists        => ApiErrorData { code: 1000, reason: String::from("name already in use") },
+            E::EmailAlreadyVerified             => ApiErrorData { code: 1001, reason: String::from("email verified, no further action necessary") },
+            E::EmailIsSuppressed                => ApiErrorData { code: 1002, reason: String::from("email address is suppressed") },
+            E::RateLimitedEmailVerification     => ApiErrorData { code: 1003, reason: String::from("new verification requested too quickly") },
+            E::VerificationEmailRejected        => ApiErrorData { code: 1004, reason: String::from("email service rejected request") },
+            E::EmailVerificationExpired         => ApiErrorData { code: 1005, reason: String::from("verification link has expired") },
+            E::VerificationEmailNotFound        => ApiErrorData { code: 1006, reason: String::from("record does not exist") },
+            E::VerificationHashCheckFailed      => ApiErrorData { code: 1007, reason: String::from("verification failed") },
+            E::LocationRecordNotFoundById       => ApiErrorData { code: 1008, reason: String::from("record does not exist") },
+            E::InsufficientLocationPermissions  => ApiErrorData { code: 1009, reason: String::from("insufficient permissions on location resource") },
+            E::MissingLocationQueryParam(_)     => ApiErrorData { code: 1010, reason: String::from("missing location query parameter") },
            _ => return None
         };
         

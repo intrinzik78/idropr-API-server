@@ -11,11 +11,7 @@ pub trait VerifyPassword {
 impl VerifyPassword for User {
     async fn verify_password(&self, password: &str) -> AuthorizationStatus {
         // retreive user hash
-        let hash_ref = match self {
-            User::System(u) => u.hash(),
-            User::Business(u) => u.hash(),
-            User::Community(u) => u.hash()
-        };
+        let hash_ref = self.hash();
 
         // clone for thread safety
         let password = password.to_owned();

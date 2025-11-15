@@ -7,12 +7,14 @@ pub enum Permission {
 #[repr(u8)]
 #[derive(Copy,Clone,Debug,PartialEq)]
 pub enum Resource {
-    Buckets = 0,
-    Images = 1,
-    Users = 2,
-    Secrets = 3,
-    Sessions = 4,
-    System = 5
+    Buckets = 0,    // image buckets
+    Images = 1,     // individual images
+    Users = 2,      // user details
+    Secrets = 3,    // system secrets
+    Sessions = 4,   // user session
+    System = 5,     // system settings
+    Business = 6,   // business account
+    Locations = 7,  // business locations
 }
 
 #[repr(u8)]

@@ -5,10 +5,9 @@ use utoipa::ToSchema;
 use crate::enums::ApiResult;
 
 /// api response wrapper, returning the code,message and optional data
-#[derive(Debug,Serialize,ToSchema)]
-#[schema(bound = "T: utoipa::ToSchema")]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ApiResponse <T> 
-where T: Serialize
+where T: Serialize + ToSchema
 {
      code: u16,
      message: String,
@@ -18,7 +17,7 @@ where T: Serialize
 }
 
 impl<T> ApiResponse <T> 
-where T:Serialize
+where T: Serialize + ToSchema
 {
     /// set custom code on response
     pub fn with_code(mut self, new_code: u16) -> Self {
@@ -62,7 +61,7 @@ where T:Serialize
 }
 
 impl <T> Default for ApiResponse <T>
-where T: Serialize
+where T: Serialize + ToSchema
 {
     fn default() -> Self {
         let code: u16 = 200;

@@ -166,8 +166,8 @@ impl UserPermissions {
     fn sysadmin() -> UserPermissions {
         let mut role_permissions = UserPermissions::default();
 
-        // read,write,delete [all] resources
-        let resources: Vec<Resource> = vec![Resource::Buckets,Resource::Images,Resource::Users,Resource::Secrets,Resource::Sessions,Resource::System];
+        // read,write,delete [all user / all system] resources
+        let resources: Vec<Resource> = vec![Resource::Buckets,Resource::Images,Resource::Users,Resource::Secrets,Resource::Sessions,Resource::System,Resource::Business,Resource::Locations];
 
         for resource in resources.iter() {
             role_permissions = role_permissions
@@ -184,8 +184,8 @@ impl UserPermissions {
     fn sysmod() -> UserPermissions {
         let mut role_permissions = UserPermissions::default();
 
-        // read,write,delete [all] buckets and images
-        let resources: Vec<Resource> = vec![Resource::Buckets,Resource::Images];
+        // read,write,delete [all user] resources
+        let resources: Vec<Resource> = vec![Resource::Buckets,Resource::Images,Resource::Business,Resource::Locations];
 
         for resource in resources.iter() {
             role_permissions = role_permissions
@@ -216,8 +216,8 @@ impl UserPermissions {
     fn user() -> UserPermissions {
         let mut role_permissions = UserPermissions::default();
 
-        // read,write,delete [owned] buckets and images
-        let resources: Vec<Resource> = vec![Resource::Buckets,Resource::Images];
+        // read,write,delete [owned] resources
+        let resources: Vec<Resource> = vec![Resource::Buckets,Resource::Images,Resource::Business,Resource::Locations];
 
         for resource in resources.iter() {
             role_permissions = role_permissions
@@ -261,7 +261,9 @@ mod tests {
             Resource::Secrets,
             Resource::Sessions,
             Resource::System,
-            Resource::Users
+            Resource::Users,
+            Resource::Business,
+            Resource::Locations,
         ];
 
         // build full admin permissions for all resources
@@ -281,7 +283,7 @@ mod tests {
         println!("lower: {}", lower);
 
         assert_eq!(upper,0);
-        assert_eq!(lower,210830276673471);
+        assert_eq!(lower,13816973012072644543);
     }
 
     #[test]
@@ -291,7 +293,17 @@ mod tests {
         let user = UserPermissions::from_role(Role::User);
         let super_user = {
             let mut role_permissions = UserPermissions::default();
-            let resources: Vec<Resource> = vec![Resource::Buckets,Resource::Images,Resource::Users,Resource::Secrets,Resource::Sessions,Resource::System];
+
+            let resources:Vec<Resource> = vec![
+                Resource::Buckets,
+                Resource::Images,
+                Resource::Secrets,
+                Resource::Sessions,
+                Resource::System,
+                Resource::Users,
+                Resource::Business,
+                Resource::Locations,
+            ];
 
             for resource in resources.iter() {
                 role_permissions = role_permissions
@@ -301,6 +313,8 @@ mod tests {
                     .with_delete_any(*resource)
                     .with_admin(*resource);
             }
+
+            println!("{}",role_permissions.mask());
 
             role_permissions
         };

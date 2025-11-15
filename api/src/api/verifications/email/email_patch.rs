@@ -11,7 +11,7 @@ use crate::{
 type Result<T> = std::result::Result<T,Error>;
 
 #[derive(Deserialize)]
-pub struct ReqPath {
+pub struct PatchReqPath {
     pub id:i64,
     pub uuid:String
 }
@@ -62,10 +62,10 @@ impl PatchEmailVerification {
         }
     }
 
-    pub async fn response(path: Path<ReqPath>, shared: Data<AppState>) -> impl Responder {
+    pub async fn response(path: Path<PatchReqPath>, shared: Data<AppState>) -> impl Responder {
         type E = Error;
 
-        let ReqPath { id, uuid } = path.into_inner();
+        let PatchReqPath { id, uuid } = path.into_inner();
         let database = shared.database();
        
         match Self::logic(id, &uuid, database).await {

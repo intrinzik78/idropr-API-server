@@ -30,7 +30,7 @@ pub struct CreateEmailVerification;
 impl CreateEmailVerification {
 
     /// process the request
-    pub async fn logic(post: Json<EmailVerificationPost>, shared: Data<AppState>) -> Result<()> {
+    async fn logic(post: Json<EmailVerificationPost>, shared: Data<AppState>) -> Result<()> {
 
         // create new uuid for email id
         let uuid = match Uuid::web_safe(NonZeroU8::new(16))? {
@@ -62,7 +62,7 @@ impl CreateEmailVerification {
 
         // dynamic content for email
         let expire_minutes= 10;
-        let verify_url = format!("https://www.battlehouston.com/{uuid}/{}",&record_id.to_string());
+        let verify_url = format!("https://www.battletexas.com/{uuid}/{}",&record_id.to_string());
 
         // render email
         let rendered_email = Self::build_email(&verify_url, expire_minutes)?;
@@ -99,7 +99,7 @@ impl CreateEmailVerification {
     }
     
     /// update record branch
-    pub async fn update_existing(record: &EmailVerification, hash:&[u8;32], database: &DatabaseConnection) -> Result<()> {
+    async fn update_existing(record: &EmailVerification, hash:&[u8;32], database: &DatabaseConnection) -> Result<()> {
         // check if user is submitting too quickly
         if !record.may_refresh() {
             return Err(Error::RateLimitedEmailVerification)
@@ -119,7 +119,7 @@ impl CreateEmailVerification {
     }
 
     /// build templated email
-    pub fn build_email(verify_url: &'_ str, expire_minutes: u32) -> Result<RenderedEmail> {
+    fn build_email(verify_url: &'_ str, expire_minutes: u32) -> Result<RenderedEmail> {
         let locale = Locale::Default;
         let template = InitialVerificationEmail {
             verify_url,

@@ -1,16 +1,12 @@
 use std::rc::Rc;
 use actix_web::{
-    body::{EitherBody, BoxBody},
-    dev::{ConnectionInfo, Service, ServiceRequest, ServiceResponse, Transform},
-    web::Data,
-    HttpResponse,
-    Error
+    Error, HttpResponse, body::{BoxBody, EitherBody}, dev::{ConnectionInfo, Service, ServiceRequest, ServiceResponse, Transform}, web::Data
 };
 use futures::future::{ok, LocalBoxFuture, Ready};
 use rate_limit::enums::Decision;
 use std::task::{Context, Poll};
 
-use crate::{enums::RateLimiterStatus, types::AppState};
+use crate::{enums::RateLimiterStatus, types::{AppState,ApiResponse}};
 
 /// target for the middleware service
 #[derive(Debug,Default)]
@@ -92,8 +88,9 @@ where
         if rate_limiter_status == Decision::Denied {
             // map fail into BoxBody
             let res = req
-                .into_response(HttpResponse::TooManyRequests()
-                .body("Rate limited"))
+                .into_response(
+                    ApiResponse::rate_limited().error()
+                )
                 .map_into_right_body();
 
             return Box::pin(async move { Ok(res) });
