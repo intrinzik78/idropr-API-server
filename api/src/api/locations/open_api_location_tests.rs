@@ -199,4 +199,57 @@ mod open_api_session_tests {
         assert_eq!(eg.as_i64().unwrap_or_default(), 500, "500 example must be enveloped Error with code 500");
     }
 
+    #[test]
+    fn private_location_500_is_enveloped_error() {
+        let v = openapi_json();
+        let op = &v["paths"]["/v1/locations/{id}/private"]["get"];
+
+        let r500 = &op["responses"]["500"];
+        assert!(r500.is_object(), "private 500 response missing");
+
+        let schema_ref = &r500["content"]["application/json"]["schema"]["$ref"];
+        assert_eq!(
+            schema_ref,
+            "#/components/schemas/ApiResultError",
+            "private 500 must use ApiResultError envelope"
+        );
+
+        let eg = &r500["content"]["application/json"]["examples"]["server_error"]["value"]["Error"]["code"];
+        assert_eq!(eg.as_i64().unwrap_or_default(), 500, "private 500 Error.code must be 500");
+    }
+
+    #[test]
+    fn locations_list_400_error_enveloped() {
+        let v = openapi_json();
+        let r400 = &v["paths"]["/v1/locations"]["get"]["responses"]["400"];
+
+        let schema_ref = &r400["content"]["application/json"]["schema"]["$ref"];
+        assert_eq!(
+            schema_ref,
+            "#/components/schemas/ApiResultError",
+            "400 schema must be ApiResultError"
+        );
+
+        let example = &r400["content"]["application/json"]["examples"]["bad_request"]["value"]["Error"];
+        assert_eq!(example["code"], 400, "400 Error.code must be 400");
+        assert!(example["data"]["code"].is_number(), "400 Error.data.code must exist");
+    }
+
+    #[test]
+    fn private_location_401_is_enveloped_error() {
+        let v = openapi_json();
+        let resp = &v["paths"]["/v1/locations/{id}/private"]["get"]["responses"]["401"];
+
+        let schema_ref = &resp["content"]["application/json"]["schema"]["$ref"];
+        assert_eq!(
+            schema_ref,
+            "#/components/schemas/ApiResultError",
+            "401 schema must be ApiResultError envelope"
+        );
+
+        let e = &resp["content"]["application/json"]["example"]["Error"];
+        assert_eq!(e["code"], 401);
+        assert!(e["message"].is_string());
+    }
+
 }

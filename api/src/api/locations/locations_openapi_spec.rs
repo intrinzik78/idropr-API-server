@@ -40,14 +40,17 @@ use super::locations_get::{PublicLocation, PrivateLocation, GetReqPath, GetReqPa
             content_type = "application/json",
             body = ApiResultError,
             examples(
-                ("not_found" = (value = json!({ "Error": { "code": 1008, "reason": "resource does not exist" } })))
+                ("not_found" = (value = json!({ "Error": { "code": 1008, "reason": "resource does not exist" } }))),
             )
         ),
         (
             status = 429, description = "rate limited",
             content_type = "application/json",
             body = ApiResultError,
-            example = json!({"Error": {"code": 429,"message": "too many requests","data": { "code": 1003, "reason": "new verification requested too quickly" }}})
+            examples(
+                ("global_rate_limit" = (value = json!({ "Error": { "code": 429, "message":"rate limited"} }))),
+                ("verification_rate_limit" = (value = json!({ "Error": { "code": 429, "message":"rate limited", "data":{"code": 1003, "reason": "new verification requested too quickly"}} })))
+            )
         ),
         (status = 500, description = "server error",
             content_type = "application/json",
@@ -74,18 +77,19 @@ pub async fn get_private_location(_permissions: WereChecked,req: HttpRequest,pat
             body = ApiResultPublicLocation,
             example = json!({"Ok":{"code":200,"message":"OK","data":{"address_1":"123 Some Road..."}}})
         ),
-        (status = 403, description = "forbidden",
+        (
+            status = 403, description = "forbidden",
             content_type = "application/json",
             body = ApiResultError,
             examples(
-              ("insufficient_permissions" = (value = json!({"Error":{"code":1009,"reason":"insufficient permissions for requested resource"}})))
+                ("insufficient_permissions" = (value = json!({ "Error": { "code": 403, "message": "forbidden", "data": { "code": 1009, "reason": "insufficient permissions for requested resource" } }})))
             )
         ),
         (status = 404, description = "not found",
             content_type = "application/json",
             body = ApiResultError,
             examples(
-              ("not_found" = (value = json!({"Error":{"code":1008,"reason":"resource does not exist"}})))
+              ("not_found" = (value = json!({"Error":{"code":404,"message":"not found","data":{"code":1008,"reason":"resource does not exist"}}})))
             )
         ),
         (status = 429, description = "rate limited",
@@ -117,29 +121,32 @@ pub async fn get_public_location(path: Path<GetReqPath>,shared: Data<AppState>) 
     params( ("nearest_zipcode" = String, Query, description = "A valid target zipcode", format = "zip") ),
     security([]),
     responses(
-        (status = 200, description = "OK",
+        (
+            status = 200, description = "OK",
             body = ApiResultPublicLocationsList,
             example = json!({"Ok":{"code":200,"message":"OK","data":[{"address_1":"123 Some Road..."}]}})
         ),
-        (status = 400, description = "bad request",
+        (
+            status = 400, description = "bad request",
             content_type = "application/json",
             body = ApiResultError,
             examples(
-              ("bad_request" = (value = json!({"Error":{"code":1010,"reason":"missing query parameter"}})))
+              ("bad_request" = (value = json!({"Error":{"code":400,"message":"bad request","data":{"code":1010,"reason":"missing query parameter"}}})))
             )
         ),
-        (status = 403, description = "forbidden",
+        (
+            status = 403, description = "forbidden",
             content_type = "application/json",
             body = ApiResultError,
             examples(
-              ("insufficient_permissions" = (value = json!({"Error":{"code":1009,"reason":"insufficient permissions for requested resource"}})))
+                ("insufficient_permissions" = (value = json!({ "Error": { "code": 403, "message": "forbidden", "data": { "code": 1009, "reason": "insufficient permissions for requested resource" } }})))
             )
         ),
         (status = 404, description = "not found",
             content_type = "application/json",
             body = ApiResultError,
             examples(
-              ("not_found" = (value = json!({"Error":{"code":1008,"reason":"resource does not exist"}})))
+              ("not_found" = (value = json!({"Error":{"code":404,"message":"not found","data":{"code":1008,"reason":"resource does not exist"}}})))
             )
         ),
         (status = 429, description = "rate limited",

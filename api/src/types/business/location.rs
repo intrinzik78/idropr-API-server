@@ -12,6 +12,7 @@ type Result<T> = std::result::Result<T,Error>;
 #[derive(Debug)]
 pub struct Location {
     id: i64,
+    name:String,
     business_account_id: i64,
     address:address::Address,
     priority:LocationPriority
@@ -20,8 +21,9 @@ pub struct Location {
 // sync
 impl Location {
     pub fn id(&self) -> i64 { self.id }
-    pub fn business_id(&self) -> i64 { self.business_account_id }
     pub fn address(&self) -> &address::Address { &self.address }
+    pub fn business_id(&self) -> i64 { self.business_account_id }
+    pub fn name(&self) -> &str { &self.name }
     pub fn priority(&self) -> LocationPriority { self.priority.clone() }
 }
 
@@ -87,6 +89,7 @@ impl Location {
 #[derive(FromRow)]
 struct DatabaseHelper {
     location_id:i64,
+    name:String,
     business_account_id:i64,
     address_id:i64,
     address_1:String,
@@ -100,11 +103,11 @@ struct DatabaseHelper {
 
 impl DatabaseHelper {
     async fn private_by_id(location_id:i64, user_id:i64, connection: &DatabaseConnection) -> Result<Option<Location>> {
-        let sql = "SELECT business_location.id AS location_id, business_location.business_account_id,priority_id,address.id AS address_id,address_1,address_2,city,state,zipcode,country
-                        FROM `business_location`
-                        JOIN business_account_users ON business_account_users.business_account_id = business_location.business_account_id
-                        JOIN address ON address.id = business_location.address_id
-                        WHERE business_location.id = ? AND business_account_users.user_id = ?";
+        let sql = "SELECT bl.id AS location_id, bl.business_account_id,name,priority_id,address.id AS address_id,address_1,address_2,city,state,zipcode,country
+                        FROM `business_location` AS bl
+                        JOIN business_account_users ON business_account_users.business_account_id = bl.business_account_id
+                        JOIN address ON address.id = bl.address_id
+                        WHERE bl.id = ? AND business_account_users.user_id = ?";
         let helper_opt:Option<DatabaseHelper> = sqlx::query_as(sql)
             .bind(location_id)
             .bind(user_id)
@@ -120,10 +123,10 @@ impl DatabaseHelper {
     }
 
     async fn pub_by_location_id(location_id:i64, connection: &DatabaseConnection) -> Result<Option<Location>> {
-        let sql = "SELECT business_location.id as location_id, business_account_id,priority_id,address.id as address_id,address_1,address_2,city,state,zipcode,country
-                        FROM `business_location`
-                        JOIN address ON address.id = business_location.address_id
-                        WHERE business_location.id = ?";
+        let sql = "SELECT bl.id AS location_id, name, business_account_id,priority_id,address.id as address_id,address_1,address_2,city,state,zipcode,country
+                        FROM `business_location` AS bl
+                        JOIN address ON address.id = bl.address_id
+                        WHERE bl.id = ?";
         let helper_opt:Option<DatabaseHelper> = sqlx::query_as(sql)
             .bind(location_id)
             .fetch_optional(&connection.pool)
@@ -138,10 +141,10 @@ impl DatabaseHelper {
     }
 
     async fn pub_list_by_business_id(id:i64, connection: &DatabaseConnection) -> Result<Vec<Location>> {
-        let sql = "SELECT business_location.id as location_id, business_account_id,priority_id,address.id as address_id,address_1,address_2,city,state,zipcode,country
-                         FROM `business_location`
-                         JOIN address ON address.id = business_location.address_id
-                         WHERE business_location.business_account_id = ?";
+        let sql = "SELECT bl.id AS location_id, name, business_account_id,priority_id,address.id AS address_id,address_1,address_2,city,state,zipcode,country
+                        FROM `business_location` AS bl
+                        JOIN address ON address.id = bl.address_id
+                        WHERE bl.id = ?";
         let mut rows:Vec<DatabaseHelper> = sqlx::query_as(sql)
             .bind(id)
             .fetch_all(&connection.pool)
@@ -158,7 +161,7 @@ impl DatabaseHelper {
 
     async fn pub_list_nearest_by_zipcode(zipcode:&str, connection: &DatabaseConnection) -> Result<Vec<Location>> {
         let sql = "WITH input AS (SELECT geom FROM main.zcta WHERE zipcode = ?)
-                        SELECT bl.id AS location_id, bl.business_account_id,bl.priority_id,a.id AS address_id,a.address_1,a.address_2,a.city,a.state,a.zipcode,a.country, ST_Distance_Sphere(i.geom, z.geom) AS meters
+                        SELECT bl.id AS location_id, bl.business_account_id,bl.name,bl.priority_id,a.id AS address_id,a.address_1,a.address_2,a.city,a.state,a.zipcode,a.country, ST_Distance_Sphere(i.geom, z.geom) AS meters
                         FROM input i
                         JOIN main.business_location bl ON bl.address_id IS NOT NULL
                         JOIN main.address a ON a.id = bl.address_id
@@ -200,6 +203,7 @@ impl DatabaseHelper {
 
         let location = Location {
             id: self.location_id,
+            name: self.name,
             business_account_id: self.business_account_id,
             address,
             priority

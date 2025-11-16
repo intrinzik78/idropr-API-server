@@ -25,6 +25,7 @@ pub struct GetReqParams {
 pub struct PrivateLocation {
     location_id:i64,
     business_id:i64,
+    name:String,
     priority: u8,
     address_1:String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -50,6 +51,7 @@ impl PrivateLocation {
         PrivateLocation {
             location_id: location.id(),
             business_id: location.business_id(),
+            name:        location.name().to_owned(),
             priority:    location.priority() as u8,
             address_1:   address.address_1().to_owned(),
             address_2:   address_2,
@@ -63,6 +65,7 @@ impl PrivateLocation {
 
 #[derive(Debug,Serialize,ToSchema)]
 pub struct PublicLocation {
+    name:String,
     address_1:String,
     #[serde(skip_serializing_if = "Option::is_none")]
     address_2:Option<String>,
@@ -84,6 +87,7 @@ impl PublicLocation {
 
         // format response
         PublicLocation {
+            name: location.name().to_owned(),
             address_1: address.address_1().to_owned(),
             address_2: address_2,
             city:      address.city().to_owned(),
