@@ -61,7 +61,7 @@ use super::locations_get::{PublicLocation, PrivateLocation, GetReqPath, GetReqPa
         ),
     )
 )]
-pub async fn get_private_location(_permissions: WereChecked,req: HttpRequest,path: Path<GetReqPath>,shared: Data<AppState>) -> impl Responder {
+pub async fn get_private_location_by_id(_permissions: WereChecked,req: HttpRequest,path: Path<GetReqPath>,shared: Data<AppState>) -> impl Responder {
     LocationsGet::private_response(_permissions, req, path, shared).await
 }
 
@@ -108,7 +108,7 @@ pub async fn get_private_location(_permissions: WereChecked,req: HttpRequest,pat
         ),
     )
 )]
-pub async fn get_public_location(path: Path<GetReqPath>,shared: Data<AppState>) -> impl Responder {
+pub async fn get_public_location_by_id(path: Path<GetReqPath>,shared: Data<AppState>) -> impl Responder {
     LocationsGet::public_response(path, shared).await
 }
 
@@ -116,7 +116,7 @@ pub async fn get_public_location(path: Path<GetReqPath>,shared: Data<AppState>) 
 #[utoipa::path(
     get,
     path = "/v1/locations",
-    operation_id = "getNearestLocationsList",
+    operation_id = "listNearestPublicLocationByZipcode",
     tags = ["locations"],
     params( ("nearest_zipcode" = String, Query, description = "A valid target zipcode", format = "zip") ),
     security([]),

@@ -83,8 +83,8 @@ mod open_api_secrets_tests {
         let bad_ref = &resp["400"]["content"]["application/json"]["schema"]["$ref"];
         assert_eq!(
             bad_ref,
-            "#/components/schemas/ApiResult_ApiResponse_String",
-            "400 schema must be ApiResult_ApiResponse_String (ApiResult<ApiResponse<String>>)"
+            "#/components/schemas/ApiResultError",
+            "400 schema must be ApiResultError"
         );
 
         // 401 should use ApiResultError and be enveloped in the example
@@ -155,13 +155,10 @@ mod open_api_secrets_tests {
         // Base shapes referenced by secrets
         for needed in [
             "CreateSecretBody",
-            "ApiResult_ApiResponse_String",
             "ApiResultError",
             "ApiErrorData",
         ] {
-            assert!(
-                comps.get(needed).is_some(),
-                "components.schemas.{needed} missing"
+            assert!(comps.get(needed).is_some(),"components.schemas.{needed} missing"
             );
         }
 

@@ -15,8 +15,8 @@ use crate::{
     security(("bearerAuth" = [])),
     info(title = "battle-texas-server", version = "0.0.6"),
     paths(
-        locations::locations_openapi_spec::get_private_location,
-        locations::locations_openapi_spec::get_public_location,
+        locations::locations_openapi_spec::get_private_location_by_id,
+        locations::locations_openapi_spec::get_public_location_by_id,
         locations::locations_openapi_spec::get_public_nearest_locations_by_zipcode,
         sessions::sessions_openapi_spec::post_sessions,
         sessions::sessions_openapi_spec::delete_sessions,

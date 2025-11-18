@@ -3,7 +3,7 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use crate::{
     enums::ApiResult,
-    types::{ApiErrorData,AppState,ApiResponse,permissions::WereChecked}
+    types::{ApiErrorData,AppState,permissions::WereChecked}
 };
 use super::secrets_post::{SecretsPost,CreateSecretBody};
 
@@ -25,7 +25,7 @@ use super::secrets_post::{SecretsPost,CreateSecretBody};
         (
             status = 400,
             description = "bad request",
-            body = ApiResult<ApiResponse<String>>,  // or ApiResponse<ErrorDetail>
+            body = ApiResultError,
             example = json!({"Error": {"code":400,"message":"duplicate: api name already in use"}})
         ),
         (status = 429, description = "rate limited",
