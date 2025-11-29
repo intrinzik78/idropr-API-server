@@ -1,0 +1,19 @@
+// RUNS A SESSION SWEEPER EVER 8 HOURS TO CLEAN OUT THE DATABASE
+
+DROP EVENT IF EXISTS main.session_prune_90d;
+DELIMITER //
+CREATE DEFINER=`session_sweeper`@`%` EVENT main.session_prune_90d
+ON SCHEDULE EVERY 8 MINUTE
+STARTS CONVERT_TZ('2025-11-06 22:57:00','America/Chicago','UTC')
+ON COMPLETION PRESERVE
+DO
+BEGIN
+  DELETE FROM main.session
+  WHERE `timestamp` < UTC_TIMESTAMP() - INTERVAL 90 DAY
+  ORDER BY `timestamp`
+  LIMIT 5000;
+
+INSERT INTO main.session_sweeper_audit (actor, event_name)
+VALUES (CURRENT_USER(), CONCAT('session_prune_90d deleted ', ROW_COUNT(), ' rows'));
+END//
+DELIMITER ;
