@@ -79,6 +79,7 @@ pub enum Error {
 
     // interal server errors ↴
     AccountStatusOutOfBounds,
+    ActivityTypeOutOfRange,             // generated when a Business::ServiceType cannot be parsed from an input string
     ApiPasswordOutOfBounds,             // api secret passwords must be: [0 < password < 32]
     ApiSecretsOutOfSyncWithDatabase,
     AddressBuilderMissingData(String),
@@ -164,6 +165,7 @@ impl Error {
             E::InsufficientLocationPermissions => ApiErrorData { code: 1009, reason: String::from("insufficient permissions on location resource") },
             E::MissingLocationQueryParam(_)    => ApiErrorData { code: 1010, reason: String::from("missing location query parameter") },
             E::DatabaseTransactionVerification => ApiErrorData { code: 1011, reason: String::from("server error, data was not saved, try again") },
+            E::ActivityTypeOutOfRange          => ApiErrorData { code: 1012, reason: String::from("invalid activity type") },
            _ => return None
         };
         

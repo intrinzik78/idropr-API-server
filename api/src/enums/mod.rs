@@ -1,5 +1,6 @@
 pub mod sessions;
 
+mod activity;
 mod api_result;
 mod auth_context;
 mod authorization_status;
@@ -26,6 +27,7 @@ mod role;
 mod verification_status;
 
 pub use api_result::ApiResult;
+pub use activity::ActivityType;
 pub use auth_context::AuthContext;
 pub use authorization_status::AuthorizationStatus;
 pub use business_account_status::BusinessAccountStatus;

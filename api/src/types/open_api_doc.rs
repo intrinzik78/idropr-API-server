@@ -2,10 +2,8 @@ use actix_web::HttpResponse;
 use serde::Serialize;
 use utoipa::{OpenApi, openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},Modify};
 use crate::{
-    api::locations,
-    api::sessions,
-    api::secrets,
-    api::verifications,
+    api::{locations, secrets, sessions, verifications},
+    enums::ActivityType,
     types::ApiResponse
 };
 
@@ -29,7 +27,8 @@ use crate::{
         schemas(
             sessions::CreateSessionBody,
             sessions::AccessToken,
-            ApiResponse<sessions::AccessToken>
+            ApiResponse<sessions::AccessToken>,
+            ActivityType
         ),
     ),
     tags(

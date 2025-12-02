@@ -3,9 +3,6 @@ mod open_api_session_tests {
     use serde_json::Value;
     use crate::types::open_api_doc::ApiDoc;
 
-    // use serde_json::Value;
-    // use crate::types::open_api_doc::ApiDoc;
-
     fn openapi_json() -> Value {
         let doc = ApiDoc::doc();
         serde_json::to_value(&doc).expect("serialize openapi doc")
@@ -251,5 +248,141 @@ mod open_api_session_tests {
         assert_eq!(e["code"], 401);
         assert!(e["message"].is_string());
     }
+
+    #[test]
+    fn locations_list_403_error_enveloped() {
+        let v = openapi_json();
+        let resp = &get_op(&v, "/v1/locations", "get")["responses"]["403"];
+
+        // Schema must be ApiResultError
+        let schema_ref = &resp["content"]["application/json"]["schema"]["$ref"];
+        assert_eq!(
+            schema_ref,
+            "#/components/schemas/ApiResultError",
+            "403 schema must be ApiResultError envelope"
+        );
+
+        // Example must be enveloped Error with code 403
+        let example = &resp["content"]["application/json"]["examples"]["insufficient_permissions"]["value"]["Error"];
+        assert_eq!(example["code"], 403, "403 Error.code must be 403");
+        assert!(example["message"].is_string(), "403 Error.message must be a string");
+    }
+
+    #[test]
+    fn locations_list_500_error_enveloped() {
+        let v = openapi_json();
+        let resp = &get_op(&v, "/v1/locations", "get")["responses"]["500"];
+
+        // Schema must be ApiResultError
+        let schema_ref = &resp["content"]["application/json"]["schema"]["$ref"];
+        assert_eq!(
+            schema_ref,
+            "#/components/schemas/ApiResultError",
+            "500 schema must be ApiResultError envelope"
+        );
+
+        // Example must be enveloped Error with code 500
+        let example = &resp["content"]["application/json"]["examples"]["server_error"]["value"]["Error"];
+        assert_eq!(example["code"], 500, "500 Error.code must be 500");
+        assert!(example["message"].is_string(), "500 Error.message must be a string");
+    }
+
+    #[test]
+    fn locations_list_is_public_and_overrides_global_security() {
+        let v = openapi_json();
+        let op = get_op(&v, "/v1/locations", "get");
+
+        let security = &op["security"];
+        assert!(
+            is_security_override_empty(security),
+            "expected /v1/locations GET to override global security with an empty requirement, got {security}"
+        );
+    }
+
+    #[test]
+    fn locations_public_by_id_is_public_and_overrides_global_security() {
+        let v = openapi_json();
+        let op = get_op(&v, "/v1/locations/{id}", "get");
+
+        let security = &op["security"];
+        assert!(
+            is_security_override_empty(security),
+            "expected /v1/locations/{{id}} GET to override global security with an empty requirement, got {security}"
+        );
+    }
+
+    #[test]
+    fn locations_private_by_id_requires_bearer_auth() {
+        let v = openapi_json();
+        let op = get_op(&v, "/v1/locations/{id}/private", "get");
+
+        let security = op["security"]
+            .as_array()
+            .expect("security must be an array");
+
+        assert!(
+            !security.is_empty(),
+            "expected /v1/locations/{{id}}/private GET to have a non-empty security array"
+        );
+
+        let first = security[0].as_object().expect("security entry must be an object");
+        assert!(
+            first.contains_key("bearerAuth"),
+            "expected bearerAuth security scheme on private locations endpoint, got {first:?}"
+        );
+    }
+
+    #[test]
+    fn locations_list_params_are_optional_and_typed_correctly() {
+        let v = openapi_json();
+        let op = get_op(&v, "/v1/locations", "get");
+
+        let params = op["parameters"]
+            .as_array()
+            .expect("parameters must be an array");
+
+        let find_param = |name: &str| {
+            params
+                .iter()
+                .find(|p| p["name"] == name)
+                .unwrap_or_else(|| panic!("missing parameter {name}"))
+        };
+
+        // nearest_zipcode
+        let zip = find_param("nearest_zipcode");
+        assert_eq!(zip["in"], "query");
+        assert_eq!(zip["required"], false);
+        assert_eq!(zip["schema"]["type"], "string");
+        assert_eq!(
+            zip["schema"]["pattern"],
+            "^[0-9]{5}(?:-[0-9]{4})?$",
+            "zipcode pattern should enforce 5-digit or ZIP+4"
+        );
+
+        // lat
+        let lat = find_param("lat");
+        assert_eq!(lat["in"], "query");
+        assert_eq!(lat["required"], false);
+        assert_eq!(lat["schema"]["type"], "number");
+        assert_eq!(lat["schema"]["format"], "float");
+
+        // lon
+        let lon = find_param("lon");
+        assert_eq!(lon["in"], "query");
+        assert_eq!(lon["required"], false);
+        assert_eq!(lon["schema"]["type"], "number");
+        assert_eq!(lon["schema"]["format"], "float");
+
+        // activity
+        let activity = find_param("activity");
+        assert_eq!(activity["in"], "query");
+        assert_eq!(activity["required"], false);
+        assert_eq!(
+            activity["schema"]["$ref"],
+            "#/components/schemas/ActivityType",
+            "activity should be a ref to ActivityType enum schema"
+        );
+    }
+
 
 }

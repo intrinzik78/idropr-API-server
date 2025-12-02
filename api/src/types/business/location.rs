@@ -84,6 +84,18 @@ impl Location {
 
         DatabaseHelper::pub_list_nearest_by_zipcode(zipcode,connection).await
     }
+
+    /// retrieves a list of locations, filtered by activity, sorted by distance from an input zipcode [read_any]
+    pub async fn read_any_nearest_by_activity(zipcode:&str, activity:u8, permissions: &UserPermissions, connection: &DatabaseConnection) -> Result<Vec<Location>> {
+        let resource = crate::enums::Resource::Locations;
+        let required_permissions = UserPermissions::new().with_read_any(resource);
+
+        if !matches!(permissions.has_permission(&required_permissions),Permission::Granted) {
+            return Err(Error::InsufficientLocationPermissions)
+        }
+
+        DatabaseHelper::pub_list_nearest_by_zipcode_filter_activity(zipcode,activity,connection).await
+    }
 }
 
 #[derive(FromRow)]
@@ -186,6 +198,45 @@ impl DatabaseHelper {
         }
 
         Ok(location_list)
+    }
+
+    async fn pub_list_nearest_by_zipcode_filter_activity(zipcode:&str, activity:u8, connection: &DatabaseConnection) -> Result<Vec<Location>> {
+        let sql = "WITH input AS (SELECT geom FROM main.zcta WHERE zipcode = ?)
+                        SELECT bl.id AS location_id, bl.business_account_id, bl.name, bl.priority_id, a.id AS address_id, a.address_1, a.address_2, a.city, a.state, a.zipcode, a.country, ST_Distance_Sphere(i.geom, z.geom) AS meters
+                        
+                        FROM input i
+                        
+                        JOIN main.business_location AS bl ON bl.address_id IS NOT NULL
+                        JOIN main.address AS a ON a.id = bl.address_id
+                        JOIN main.zcta AS z ON z.zipcode = a.zipcode
+                        
+                        WHERE EXISTS (
+                            SELECT 1
+                            FROM main.business_location_services AS bs
+                            WHERE bs.location_id = bl.id
+                            AND bs.location_service_id = ?
+                        )
+
+                        ORDER BY meters, bl.id
+                        
+                        LIMIT 3";
+
+        let helper_list:Vec<DatabaseHelper> = sqlx::query_as(sql)
+            .bind(zipcode)
+            .bind(activity)
+            .fetch_all(&connection.pool)
+            .await?;
+
+        if helper_list.is_empty() { return Ok(Vec::new()) }
+
+        let mut location_list:Vec<Location> = Vec::with_capacity(3);
+
+        for helper in helper_list {
+            let location = helper.transform()?;
+            location_list.push(location);
+        }
+
+        Ok(location_list) 
     }
 
     fn transform(self) -> Result<Location> {

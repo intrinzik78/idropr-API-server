@@ -3,8 +3,8 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use crate::{
     api::locations::LocationsGet,
-    enums::ApiResult,
-    types::{ApiErrorData, AppState, permissions::WereChecked}
+    enums::{ActivityType,ApiResult,Error},
+    types::{ApiErrorData, ApiResponse, AppState, permissions::WereChecked}
 };
 use super::locations_get::{PublicLocation, PrivateLocation, GetReqPath, GetReqParams};
 
@@ -40,7 +40,8 @@ use super::locations_get::{PublicLocation, PrivateLocation, GetReqPath, GetReqPa
             content_type = "application/json",
             body = ApiResultError,
             examples(
-                ("not_found" = (value = json!({ "Error": { "code": 1008, "reason": "resource does not exist" } }))),
+                ("not_found" = (value = json!({ "Error": { "code": 404, "message": "not found", "data": { "code": 1008, "reason": "resource does not exist" } }})))
+
             )
         ),
         (
@@ -118,7 +119,25 @@ pub async fn get_public_location_by_id(path: Path<GetReqPath>,shared: Data<AppSt
     path = "/v1/locations",
     operation_id = "listNearestPublicLocationByZipcode",
     tags = ["locations"],
-    params( ("nearest_zipcode" = String, Query, description = "A valid target zipcode", format = "zip") ),
+    params(
+        ("nearest_zipcode" = Option<String>, Query,
+            description = "zipcode string; required for zipcode-based nearest search.",
+            example = "77002",
+            pattern = r"^[0-9]{5}(?:-[0-9]{4})?$"
+        ),
+        ("lat" = Option<f32>, Query,
+            description = "latitude coordinate; lon also required for coordinate-based nearest search.",
+            example = 29.7604
+        ),
+        ("lon" = Option<f32>, Query,
+            description = "longitude coordinate; lat also required for coordinate-based nearest search.",
+            example = -95.3698
+        ),
+        ("activity" = Option<ActivityType>, Query,
+            description = "activity filter",
+            example = "paintball"
+        )
+    ),
     security([]),
     responses(
         (
@@ -167,7 +186,22 @@ pub async fn get_public_location_by_id(path: Path<GetReqPath>,shared: Data<AppSt
     )
 )]
 pub async fn get_public_nearest_locations_by_zipcode(params:Query<GetReqParams>, shared: Data<AppState>) -> impl Responder {
-    LocationsGet::public_nearest_zipcode_response(params, shared).await
+    if params.nearest_zipcode.is_none() {
+        let e = Error::MissingLocationQueryParam("zipcode".to_string())
+            .to_api_error_message()
+            .expect("unreachable");
+        
+        return ApiResponse::bad_request().with_code(e.code).with_message(e.reason).error();
+    }
+
+    // filter on params given
+    if params.activity.is_some() {
+        LocationsGet::public_nearest_activity_response(params, shared).await
+    } else if params.lat.is_some() && params.lon.is_some() {
+        todo!()
+    } else {
+        ApiResponse::server_error().error()
+    }
 }
 
 #[derive(Serialize, ToSchema)]

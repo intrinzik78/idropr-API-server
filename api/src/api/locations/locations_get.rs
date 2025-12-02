@@ -1,11 +1,11 @@
-use actix_web::{HttpMessage, HttpRequest, Responder, web::{Data,Path,Query}};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web::{Data,Path,Query}};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::{
-    enums::{AuthContext,Error,Resource},
+    enums::{ActivityType,AuthContext,Error,Resource},
     traits::ToUser,
-    types::{ApiErrorData, ApiResponse, AppState, business::{self, Location}, permissions::{UserPermissions, WereChecked}}};
+    types::{ApiErrorData, ApiResponse, AppState, business::Location, permissions::{UserPermissions, WereChecked}}};
 
 type Result<T> = std::result::Result<T,Error>;
 
@@ -14,11 +14,12 @@ pub struct GetReqPath {
     pub id:i64
 }
 
-#[derive(Deserialize)]
+#[derive(Clone,Deserialize,ToSchema)]
 pub struct GetReqParams {
-    pub nearest_zipcode:Option<String>,
-    pub lat:Option<f32>,
-    pub lon:Option<f32>
+    pub nearest_zipcode: Option<String>,
+    pub lat: Option<f32>,
+    pub lon: Option<f32>,
+    pub activity: Option<ActivityType>,
 }
 
 #[derive(Debug,Serialize,ToSchema)]
@@ -122,7 +123,7 @@ impl LocationsGet {
         let location_id = path.id;
 
         // query database for location by id with private permissions
-        let location = business::Location::read_self_by_id(location_id, user_id, &permissions, connection).await?;
+        let location = Location::read_self_by_id(location_id, user_id, &permissions, connection).await?;
 
         // format response as a PrivateLocation
         let private_location = PrivateLocation::transform(&location);
@@ -142,7 +143,7 @@ impl LocationsGet {
         let connection = shared.database();
 
         // query database for location by id with public permissions
-        let location = business::Location::read_any_by_id(*location_id, &permissions, connection).await?;
+        let location = Location::read_any_by_id(*location_id, &permissions, connection).await?;
 
         // format response as a PublicLocation
         let public_location = PublicLocation::transform(&location);
@@ -182,8 +183,49 @@ impl LocationsGet {
         Ok(public_locations)
     }
 
+    async fn public_nearest_with_activity_logic(params:Query<GetReqParams>, shared: Data<AppState>) -> Result<Vec<PublicLocation>> {
+        
+        // extract zipcode from query params and return error if missing
+        let zipcode = params
+            .to_owned()
+            .into_inner()
+            .nearest_zipcode
+            .ok_or(Error::MissingLocationQueryParam(String::from("zipcode")))?;
+
+        // extract zipcode from query params and return error if missing
+        let activity = params
+            .to_owned()
+            .into_inner()
+            .activity
+            .ok_or(Error::MissingLocationQueryParam(String::from("activity")))?
+            .to_u8();
+
+        // set permissions for the query [read_any]
+        let resource = Resource::Locations;
+        let permissions = UserPermissions::new()
+            .with_read_any(resource);
+        
+
+        // extract database connection
+        let connection = shared.database();
+
+        // retreive the list of locations nearest the zipcode parameter
+        let list = Location::read_any_nearest_by_activity(&zipcode, activity, &permissions, connection).await?;
+
+        // alloc
+        let mut public_locations:Vec<PublicLocation> = Vec::new();
+
+        // transform the records into PublicLocations
+        for item in list.iter() {
+            let public_location = PublicLocation::transform(item);
+            public_locations.push(public_location);
+        }
+        
+        Ok(public_locations)
+    }
+
     /// returns public data about a single location by id
-    pub async fn public_response(path: Path<GetReqPath>, shared: Data<AppState>) -> impl Responder {
+    pub async fn public_response(path: Path<GetReqPath>, shared: Data<AppState>) -> HttpResponse {
         type E = Error;
 
         let query = Self::public_logic(path, shared).await;
@@ -207,7 +249,7 @@ impl LocationsGet {
     }
 
     /// returns private data about a single location by id
-    pub async fn private_response(_permission:WereChecked, req: HttpRequest, path: Path<GetReqPath>, shared: Data<AppState>) -> impl Responder {
+    pub async fn private_response(_permission:WereChecked, req: HttpRequest, path: Path<GetReqPath>, shared: Data<AppState>) -> HttpResponse {
         type E = Error;
 
         let query = Self::private_logic(req, path, shared).await;
@@ -231,7 +273,7 @@ impl LocationsGet {
     }
 
     /// returns a list of public locations nearest to a zipcode provided in the query parameters
-    pub async fn public_nearest_zipcode_response(params:Query<GetReqParams>, shared: Data<AppState>) -> impl Responder {
+    pub async fn public_nearest_zipcode_response(params:Query<GetReqParams>, shared: Data<AppState>) -> HttpResponse {
         let location_list = match Self::public_nearest_logic(params,shared).await {
             Ok(l) => l,
             Err(e) => {
@@ -245,6 +287,40 @@ impl LocationsGet {
 
                 if let Some(d) = d_opt {
                     let response = match e {
+                        E::MissingLocationQueryParam(_)     => ApiResponse::default().with_code(400).with_data(d).error(),
+                        E::InsufficientLocationPermissions  => ApiResponse::default().with_code(403).with_data(d).error(),
+                        _ =>                                   ApiResponse::server_error().error()
+                    };
+                    
+                    return response
+                } else {
+                    return ApiResponse::server_error().error()
+                }
+            }
+        };
+
+        ApiResponse::default()
+            .with_code(200)
+            .with_data(location_list)
+            .ok()
+    }
+
+    /// returns a list of public locations, filtered by activity type, nearest to a zipcode
+    pub async fn public_nearest_activity_response(params:Query<GetReqParams>, shared: Data<AppState>) -> HttpResponse {
+        let location_list = match Self::public_nearest_with_activity_logic(params,shared).await {
+            Ok(l) => l,
+            Err(e) => {
+                // log error here
+                println!("{e}");
+                
+                // return a helpful error message where possible
+                type E = Error;
+                
+                let d_opt = e.to_api_error_message();
+
+                if let Some(d) = d_opt {
+                    let response = match e {
+                        E::ActivityTypeOutOfRange           => ApiResponse::default().with_code(400).with_data(d).error(),
                         E::MissingLocationQueryParam(_)     => ApiResponse::default().with_code(400).with_data(d).error(),
                         E::InsufficientLocationPermissions  => ApiResponse::default().with_code(403).with_data(d).error(),
                         _ =>                                   ApiResponse::server_error().error()

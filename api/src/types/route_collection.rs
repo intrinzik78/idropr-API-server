@@ -91,6 +91,14 @@ impl RouteCollection {
                 // PUBLIC nearest location with parameters
                 .service(
                     web::resource("")
+                        // nearest by zipcode: GET /locations?zipcode=77002&activity=gokarts
+                        .route(
+                            web::route()
+                                .guard(guard::Get())
+                                .guard(HasKeyValue("nearest_zipcode"))
+                                .guard(HasKeyValue("activity"))
+                                .to(G::public_nearest_activity_response)
+                        )
                         // nearest by zipcode: GET /locations?zipcode=77002
                         .route(
                             web::route()

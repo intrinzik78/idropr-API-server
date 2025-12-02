@@ -39,7 +39,13 @@ use super::email_patch::{PatchEmailVerification,PatchReqPath};
             )
 
         ),
-        (status = 500, description = "server error")
+        (status = 500, description = "server error",
+            content_type = "application/json",
+            body = ApiResultError,
+            examples(
+                ("server_error" = (value = json!({ "Error": { "code": 500, "message":"server error"} })))
+            )
+        ),
     )
 )]
 
