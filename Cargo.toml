@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "api",
+    "doc-extractor",
     "email-template",
     "rate-limit",
     "database",

@@ -5,7 +5,7 @@ use form_urlencoded;
 use actix_web::{Scope, guard::{self, GuardContext}, web};
 
 use crate::{
-    api::{HealthCheck,locations,sessions,secrets,verifications},
+    api::{HealthCheck,locations,sessions,secrets,verifications,extractions},
     enums::Role,
     services::RouteLock,
     types::permissions::UserPermissions
@@ -24,6 +24,7 @@ impl RouteCollection {
             .configure(RouteCollection::sessions)
             .configure(RouteCollection::secrets)
             .configure(RouteCollection::email_verification)
+            .configure(RouteCollection::extractions)
     }
 }
 
@@ -78,7 +79,7 @@ impl RouteCollection {
         todo!()
     }
 
-    /// secrets resource and endpoings
+    /// locations resource and endpoings
     pub fn locations(cfg: &mut web::ServiceConfig) {
         type G = locations::LocationsGet;
 
@@ -149,6 +150,31 @@ impl RouteCollection {
                 .route("/{id}", actix_web::web::put().to(secrets::SecretsPut::logic))
                 .route("/{id}", actix_web::web::patch().to(secrets::SecretsPatch::logic))
                 .route("/{id}", actix_web::web::delete().to(secrets::SecretsDelete::logic))
+        );
+    }
+
+    /// doc extractions resource and endpoints
+    pub fn extractions(cfg: &mut web::ServiceConfig) {
+        type P = extractions::ScanSessionPost;
+
+        const BASE:&str = "/extractions";
+
+        let required_permissions = UserPermissions::from_role(Role::Editor);
+
+        cfg.service(
+            web::scope(BASE)
+                // PRIVATE, RW DocExtraction rights required
+                .service(
+                    web::resource("/sessions")
+                        .wrap(RouteLock::default(&required_permissions))
+                        .route(web::post().to(P::private_sessions_response))
+                )
+                // PRIVATE, RW DocExtraction rights required
+                .service(
+                    web::resource("/sessions/{session_id}/single")
+                        .wrap(RouteLock::default(&required_permissions))
+                        .route(web::post().to(P::private_single_upload_response))
+                )
         );
     }
 }

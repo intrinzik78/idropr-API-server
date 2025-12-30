@@ -2,7 +2,7 @@ use actix_web::HttpResponse;
 use serde::Serialize;
 use utoipa::{OpenApi, openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},Modify};
 use crate::{
-    api::{locations, secrets, sessions, verifications},
+    api::{extractions,locations, secrets, sessions, verifications},
     enums::ActivityType,
     types::ApiResponse
 };
@@ -13,6 +13,7 @@ use crate::{
     security(("bearerAuth" = [])),
     info(title = "battle-texas-server", version = "0.0.6"),
     paths(
+        extractions::extraction_openapi_spec::post_extraction_session,
         locations::locations_openapi_spec::get_private_location_by_id,
         locations::locations_openapi_spec::get_public_location_by_id,
         locations::locations_openapi_spec::get_public_nearest_locations_by_zipcode,
@@ -35,7 +36,9 @@ use crate::{
         (name="sessions", description="session endpoints for user authentication"),
         (name="secrets", description="CRUD management of API secrets"),
         (name="verifications", description="email and sms verification endpoints"),
-        (name="locations", description="business location endpoints")
+        (name="locations", description="business location endpoints"),
+        (name="extractions", description="document scans and ocr extractions to data types"),
+        (name="scans", description="document scans and ocr extractions to data types")
     )
 )]
 pub struct ApiDoc;

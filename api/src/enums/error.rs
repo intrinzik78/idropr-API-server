@@ -1,5 +1,6 @@
 use actix_web::http::header::ToStrError;
 use derive_more::derive::From;
+use doc_extractor::enums::ExtractorError;
 use postmark;
 use std::{
     fmt::Display,
@@ -41,6 +42,9 @@ pub enum Error {
     #[from]
     DatabaseError(database::enums::DatabaseError),
 
+    #[from]
+    ExtractorError(ExtractorError),
+
     /// derived from `aes_gcm::Error` for encryption errors
     #[from]
     EmailTemplate(email_template::enums::TemplateError),
@@ -52,6 +56,10 @@ pub enum Error {
     /// Utf8 errors are generated during decryption when Vec<u8> is converted to plain text
     #[from]
     FromUtf8Error(FromUtf8Error),
+
+    /// multi-part errors generated during form uploads to the server
+    #[from]
+    Multipart(actix_multipart::MultipartError),
 
     /// Utf8 errors are generated during decryption when Vec<u8> is converted to plain text
     #[from]
@@ -105,6 +113,7 @@ pub enum Error {
     PoisonedSessionList,                // session shard could not be locked
     PoisonedUserEpoch,
     RequiredUserBuildDataMissing,
+    ScanSessionIdNotCreated,
     ServerCrash(String),                // generated if the HttpServer itself were to crash
     ServerModeOutOfRange,               // generated when the ToServerMode cannot match a database server mode value
     SessionHashNotVerified,             // could not verify the bcrypt hash with the user's token
@@ -126,6 +135,13 @@ pub enum Error {
     TooFewRowsUpdated,                  //
     TooManyRowsUpdated,                 // 
     UnexpectedEmptyUserList,
+    UnknownMultiPartField,
+    UploadBadRequest(String),
+    UploadMissingFileData,
+    UploadMissingFieldName,
+    UploadTooManyParts { max:usize },
+    UploadedFileTooLarge,
+    UploadTooLargeTotal,
     UserEpochLockNotAquired,
     UserEpochPoisoned,
     UserAccountStatusNotEnabled,
@@ -166,6 +182,7 @@ impl Error {
             E::MissingLocationQueryParam(_)    => ApiErrorData { code: 1010, reason: String::from("missing location query parameter") },
             E::DatabaseTransactionVerification => ApiErrorData { code: 1011, reason: String::from("server error, data was not saved, try again") },
             E::ActivityTypeOutOfRange          => ApiErrorData { code: 1012, reason: String::from("invalid activity type") },
+            E::ScanSessionIdNotCreated         => ApiErrorData { code: 1013, reason: String::from("scan session insert succeeded but row not found") },
            _ => return None
         };
         

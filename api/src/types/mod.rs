@@ -3,9 +3,10 @@ pub mod business;
 pub mod email;
 pub mod open_api_doc;
 pub mod permissions;
-pub mod users;
+pub mod scans;
 pub mod secrets;
 pub mod sessions;
+pub mod users;
 
 mod api_error_data;
 mod authorization_token;

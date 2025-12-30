@@ -167,7 +167,7 @@ impl UserPermissions {
         let mut role_permissions = UserPermissions::default();
 
         // read,write,delete [all user / all system] resources
-        let resources: Vec<Resource> = vec![Resource::Buckets,Resource::Images,Resource::Users,Resource::Secrets,Resource::Sessions,Resource::System,Resource::Business,Resource::Locations];
+        let resources: Vec<Resource> = vec![Resource::Buckets,Resource::Images,Resource::Users,Resource::Secrets,Resource::Sessions,Resource::System,Resource::Business,Resource::Locations,Resource::DocExtraction];
 
         for resource in resources.iter() {
             role_permissions = role_permissions
@@ -185,7 +185,7 @@ impl UserPermissions {
         let mut role_permissions = UserPermissions::default();
 
         // read,write,delete [all user] resources
-        let resources: Vec<Resource> = vec![Resource::Buckets,Resource::Images,Resource::Business,Resource::Locations];
+        let resources: Vec<Resource> = vec![Resource::Buckets,Resource::Images,Resource::Business,Resource::Locations,Resource::DocExtraction];
 
         for resource in resources.iter() {
             role_permissions = role_permissions
@@ -209,7 +209,25 @@ impl UserPermissions {
     /// tbd
     #[allow(dead_code)]
     fn editor() -> UserPermissions {
-        todo!()
+        let mut role_permissions = UserPermissions::default();
+
+        // read,write [all user] resources, read,write,delete [owned] user content
+        let resources: Vec<Resource> = vec![Resource::Buckets,Resource::Images,Resource::Business,Resource::Locations,Resource::DocExtraction];
+
+        for resource in resources.iter() {
+            role_permissions = role_permissions
+                .with_rw_self(*resource)
+                .with_rw_any(*resource)
+                .with_delete_self(*resource);
+        }
+
+        // read,write [owned] user account
+        role_permissions = role_permissions.with_read_self(Resource::Users).with_write_self(Resource::Users);
+
+        // logout
+        role_permissions = role_permissions.with_delete_self(Resource::Sessions);
+
+        role_permissions
     }
 
     /// base user account
@@ -239,7 +257,7 @@ impl UserPermissions {
         match role {
             Role::SysAdmin => Self::sysadmin(),
             Role::SysMod => Self::sysmod(),
-            Role::Editor => todo!(),
+            Role::Editor => Self::editor(),
             Role::User => Self::user()
         }
     }
@@ -264,6 +282,7 @@ mod tests {
             Resource::Users,
             Resource::Business,
             Resource::Locations,
+            Resource::DocExtraction
         ];
 
         // build full admin permissions for all resources
@@ -282,7 +301,7 @@ mod tests {
         println!("upper: {}", upper);
         println!("lower: {}", lower);
 
-        assert_eq!(upper,0);
+        assert_eq!(upper,191);
         assert_eq!(lower,13816973012072644543);
     }
 
@@ -303,6 +322,7 @@ mod tests {
                 Resource::Users,
                 Resource::Business,
                 Resource::Locations,
+                Resource::DocExtraction
             ];
 
             for resource in resources.iter() {
