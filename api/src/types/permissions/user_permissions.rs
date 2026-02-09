@@ -33,11 +33,11 @@ impl UserPermissions {
     pub async fn into_db_as_transaction(user_id: i64, permissions: UserPermissions, tx: &mut Transaction<'static,MySql>) -> Result<u64> {
         let upper = permissions.mask.to_upper();
         let lower = permissions.mask.to_lower();
-        let sql = "INSERT INTO `user_permissions` (upper,lower) VALUES (?,?) WHERE id = ?";
+        let sql = "INSERT INTO `user_permissions` (id,upper,lower) VALUES (?,?,?)";
         let insert_id = sqlx::query(sql)
+            .bind(user_id)
             .bind(upper)
             .bind(lower)
-            .bind(user_id)
             .execute(&mut **tx)
             .await?
             .last_insert_id();

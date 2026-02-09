@@ -45,7 +45,7 @@ impl Address {
     }
 
     async fn into_db(builder: &Builder, connection: &DatabaseConnection) -> Result<i64> {
-        let sql = "INSERT INTO `address` (address_1,address_2,city,state,zipcode,country VALUES (?,?,?,?,?,?)";
+        let sql = "INSERT INTO `address` (address_1,address_2,city,state,zipcode,country) VALUES (?,?,?,?,?,?)";
         let insert_id = sqlx::query(sql)
             .bind(&builder.address_1)
             .bind(&builder.address_2)

@@ -125,7 +125,7 @@ impl EmailVerification {
 
     /// inserts a new email verification record within a transaction
     pub async fn into_db_as_transaction(email:&str, hash:&[u8;32], tx: &mut Transaction<'_,MySql>) -> Result<u64> {
-        let sql = "INSERT INTO `email_verification` (email,hash,status) VALUES(?,?,?)";
+        let sql = "INSERT INTO `email_verification` (email,hash) VALUES(?,?)";
         let insert_id = sqlx::query(sql)
             .bind(email)
             .bind(hash.as_slice())
