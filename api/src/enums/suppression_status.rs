@@ -8,9 +8,9 @@ pub enum SuppressionStatus {
     Hard = 0,
     Soft = 1,
     SpamComplaint = 2,
-    Unsubscribe = 3,
-    ManualSuppression = 4,
-    PolicyBlock = 5
+    ManualSuppression = 3,
+    PolicyBlock = 4,
+    Unsubscribe = 5
 }
 
 impl SuppressionStatus {
@@ -19,9 +19,9 @@ impl SuppressionStatus {
             0 => Self::Hard,
             1 => Self::Soft,
             2 => Self::SpamComplaint,
-            3 => Self::Unsubscribe,
-            4 => Self::ManualSuppression,
-            5 => Self::PolicyBlock,
+            3 => Self::ManualSuppression,
+            4 => Self::PolicyBlock,
+            5 => Self::Unsubscribe,
             _ => return Err(Error::SuppressionStatusOutOfRange)
         })
     }
@@ -38,24 +38,24 @@ pub mod test {
         let hard = S::Hard;
         let soft = S::Soft;
         let spam_complaint = S::SpamComplaint;
-        let unsubscribe = S::Unsubscribe;
         let manual_suppression = S::ManualSuppression;
         let policy_block = S::PolicyBlock;
-        
+        let unsubscribe = S::Unsubscribe;
+
         let hard_test = S::from_u8(0).unwrap();
         let soft_test = S::from_u8(1).unwrap();
         let spam_complaint_test = S::from_u8(2).unwrap();
-        let unsubscribe_test = S::from_u8(3).unwrap();
-        let manual_suppression_test = S::from_u8(4).unwrap();
-        let policy_block_test = S::from_u8(5).unwrap();
+        let manual_suppression_test = S::from_u8(3).unwrap();
+        let policy_block_test = S::from_u8(4).unwrap();
+        let unsubscribe_test = S::from_u8(5).unwrap();
         let fail_test = S::from_u8(6);
 
         assert_eq!(hard,hard_test);
         assert_eq!(soft,soft_test);
         assert_eq!(spam_complaint,spam_complaint_test);
-        assert_eq!(unsubscribe,unsubscribe_test);
         assert_eq!(manual_suppression,manual_suppression_test);
         assert_eq!(policy_block,policy_block_test);
+        assert_eq!(unsubscribe,unsubscribe_test);
 
         assert!(fail_test.is_err());
     }
