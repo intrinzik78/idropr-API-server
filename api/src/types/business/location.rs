@@ -110,7 +110,9 @@ struct DatabaseHelper {
     state:String,
     zipcode:String,
     country:String,
-    priority_id:u8
+    priority_id:u8,
+    #[sqlx(default)]
+    meters:Option<f64>
 }
 
 impl DatabaseHelper {

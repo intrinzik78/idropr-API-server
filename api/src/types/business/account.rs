@@ -77,7 +77,7 @@ impl Account {
 }
 
 #[derive(FromRow)]
-pub struct DatabaseHelper {
+struct DatabaseHelper {
     id: i64,
     business_name:String,
     business_owner_id:i64,

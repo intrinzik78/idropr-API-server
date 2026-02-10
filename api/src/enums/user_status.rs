@@ -1,3 +1,5 @@
+use crate::enums::Error;
+
 #[derive(Clone,Copy,Debug,PartialEq)]
 #[repr(i8)]
 pub enum UserAccountStatus {
@@ -5,6 +7,18 @@ pub enum UserAccountStatus {
     Enabled     = 1,  // 1
     Suspended   = 2,  // 2
     Banned      = 3   // 3
+}
+
+impl UserAccountStatus {
+    pub fn from_u8(value: u8) -> Result<Self, Error> {
+        Ok(match value {
+            0 => Self::Disabled,
+            1 => Self::Enabled,
+            2 => Self::Suspended,
+            3 => Self::Banned,
+            _ => return Err(Error::UserAccountStatusOutOfBounds)
+        })
+    }
 }
 
 #[cfg(test)]

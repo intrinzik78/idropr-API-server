@@ -2,13 +2,14 @@ use actix_web::http::header::ToStrError;
 use derive_more::derive::From;
 use doc_extractor::enums::ExtractorError;
 use postmark;
+use serde::Serialize;
+use utoipa::ToSchema;
 use std::{
     fmt::Display,
+    io,
     str::Utf8Error,
     string::FromUtf8Error
 };
-
-use crate::types::ApiErrorData;
 
 #[derive(Debug,From)]
 pub enum Error {
@@ -57,6 +58,9 @@ pub enum Error {
     #[from]
     FromUtf8Error(FromUtf8Error),
 
+    #[from]
+    IoError(io::Error),
+
     /// multi-part errors generated during form uploads to the server
     #[from]
     Multipart(actix_multipart::MultipartError),
@@ -91,7 +95,9 @@ pub enum Error {
     ApiPasswordOutOfBounds,             // api secret passwords must be: [0 < password < 32]
     ApiSecretsOutOfSyncWithDatabase,
     AddressBuilderMissingData(String),
+    BoolLockNotAquired,
     BusinessAccountNotFound(i64),
+    CampaignStatusOutOfBounds(u8),
     CannotDecryptEmptyDataSet,          // attempted decryption on an empty data set
     CouldNotVerifyEncryptionSuccess,
     DatabaseConnection(String),         // failed database connection with the message passed back by the database itself
@@ -99,6 +105,8 @@ pub enum Error {
     DatabaseTransactionVerification,
     EmailVerificationExpired,
     EmptyStringWhereDataExpected,
+    FileHashBadLength(usize),
+    InsufficientPermissions,
     InsufficientLocationPermissions,
     LocationPriorityOutOfBounds,
     LocationRecordNotFoundById,
@@ -113,7 +121,13 @@ pub enum Error {
     PoisonedSessionList,                // session shard could not be locked
     PoisonedUserEpoch,
     RequiredUserBuildDataMissing,
+    ScanControllerInstantFailed,
+    ScanDocStatusNotUpdated,
+    ScannerReadLockNotAquired,
     ScanSessionIdNotCreated,
+    ScanSessionDuplicateIdFound,
+    ScanSessionNotFound,
+    ScanSessionStatusNotUpdated,
     ServerCrash(String),                // generated if the HttpServer itself were to crash
     ServerModeOutOfRange,               // generated when the ToServerMode cannot match a database server mode value
     SessionHashNotVerified,             // could not verify the bcrypt hash with the user's token
@@ -128,6 +142,7 @@ pub enum Error {
     SessionTokenLengthTooShort,         // client has provided a session token shorter than required
     SessionTokenIncorrectType,          // UUID::Crypto is the correct type to pass to the session token hasher
     SliceNotCopied,                     // could not verify copy_from_slice was successful
+    StorageKeyBadLength(usize),
     SuppressionStatusOutOfRange,
     SystemSettingsNotSet,               // generated on startup when attempting to change a system while it's set to None
     SystemSettingsRecordNotReturned,    // a system settings record was not available in the database
@@ -137,13 +152,16 @@ pub enum Error {
     UnexpectedEmptyUserList,
     UnknownMultiPartField,
     UploadBadRequest(String),
-    UploadMissingFileData,
     UploadMissingFieldName,
+    UploadMissingFileData,
+    UploadMissingFileExt,
+    UploadMissingFileName,
     UploadTooManyParts { max:usize },
     UploadedFileTooLarge,
     UploadTooLargeTotal,
     UserEpochLockNotAquired,
-    UserEpochPoisoned,
+    UserEpochNotFound,
+    // UserEpochPoisoned,
     UserAccountStatusNotEnabled,
     UserAccountStatusOutOfBounds,       // generated when ToUserAccountStatus cannot parse a value into a UserAccountStatus enum
     UserIdNotInDatabase,
@@ -153,6 +171,7 @@ pub enum Error {
     VerificationEmailNotFound,
     WrongUuidTypeForSessionHash,        // session hash requires a crypto uuid
     WrongUuidTypeForEmailVerification,  // email verification uuid must be either web-safe string or web-safe-nums string
+    WrongUuidTypeForImageStorage,
     ZeroLengthUUIDFound,                // uuids cannot be zero length, zero length found
     
 
@@ -163,27 +182,42 @@ pub enum Error {
     RateLimitedEmailVerification,       // generic rate limited status
 }
 
-impl Error {
+#[derive(Debug,Serialize,ToSchema)]
+pub struct ErrorReason {
+      code: u16,
+      reason: String
+}
+
+impl Error{
     /// creates a front facing error message for public consumption
-    pub fn to_api_error_message(&self) -> Option<ApiErrorData> {
+    pub fn to_api_error_message(&self) -> Option<ErrorReason> {
         type E = Error;
 
         let data = match self {
-            E::DuplicateSecretNameExists       => ApiErrorData { code: 1000, reason: String::from("name already in use") },
-            E::EmailAlreadyVerified            => ApiErrorData { code: 1001, reason: String::from("email verified, no further action necessary") },
-            E::EmailIsSuppressed               => ApiErrorData { code: 1002, reason: String::from("email address is suppressed") },
-            E::RateLimitedEmailVerification    => ApiErrorData { code: 1003, reason: String::from("new verification requested too quickly") },
-            E::VerificationEmailRejected       => ApiErrorData { code: 1004, reason: String::from("email service rejected request") },
-            E::EmailVerificationExpired        => ApiErrorData { code: 1005, reason: String::from("verification link has expired") },
-            E::VerificationEmailNotFound       => ApiErrorData { code: 1006, reason: String::from("record does not exist") },
-            E::VerificationHashCheckFailed     => ApiErrorData { code: 1007, reason: String::from("verification failed") },
-            E::LocationRecordNotFoundById      => ApiErrorData { code: 1008, reason: String::from("record does not exist") },
-            E::InsufficientLocationPermissions => ApiErrorData { code: 1009, reason: String::from("insufficient permissions on location resource") },
-            E::MissingLocationQueryParam(_)    => ApiErrorData { code: 1010, reason: String::from("missing location query parameter") },
-            E::DatabaseTransactionVerification => ApiErrorData { code: 1011, reason: String::from("server error, data was not saved, try again") },
-            E::ActivityTypeOutOfRange          => ApiErrorData { code: 1012, reason: String::from("invalid activity type") },
-            E::ScanSessionIdNotCreated         => ApiErrorData { code: 1013, reason: String::from("scan session insert succeeded but row not found") },
-           _ => return None
+            E::DuplicateSecretNameExists            => ErrorReason { code: 1000, reason: String::from("name already in use") },
+            E::EmailAlreadyVerified                 => ErrorReason { code: 1001, reason: String::from("email verified, no further action necessary") },
+            E::EmailIsSuppressed                    => ErrorReason { code: 1002, reason: String::from("email address is suppressed") },
+            E::RateLimitedEmailVerification         => ErrorReason { code: 1003, reason: String::from("new verification requested too quickly") },
+            E::VerificationEmailRejected            => ErrorReason { code: 1004, reason: String::from("email service rejected request") },
+            E::EmailVerificationExpired             => ErrorReason { code: 1005, reason: String::from("verification link has expired") },
+            E::VerificationEmailNotFound            => ErrorReason { code: 1006, reason: String::from("record does not exist") },
+            E::VerificationHashCheckFailed          => ErrorReason { code: 1007, reason: String::from("verification failed") },
+            E::LocationRecordNotFoundById           => ErrorReason { code: 1008, reason: String::from("record does not exist") },
+            E::InsufficientLocationPermissions      => ErrorReason { code: 1009, reason: String::from("insufficient permissions on location resource") },
+            E::MissingLocationQueryParam(_)         => ErrorReason { code: 1010, reason: String::from("missing location query parameter") },
+            E::DatabaseTransactionVerification      => ErrorReason { code: 1011, reason: String::from("server error, data was not saved, try again") },
+            E::ActivityTypeOutOfRange               => ErrorReason { code: 1012, reason: String::from("invalid activity type") },
+            E::ScanSessionIdNotCreated              => ErrorReason { code: 1013, reason: String::from("scan session insert succeeded but row not found") },
+            E::UploadMissingFieldName               => ErrorReason { code: 1014, reason: String::from("upload aborted, cannot parse multi-part upload, it did not have a field name indicated  in the payload") },
+            E::UploadMissingFileData                => ErrorReason { code: 1015, reason: String::from("upload failed, one or more uploaded files had no data, 0 byte sized files are rejected") },
+            E::UploadMissingFileExt                 => ErrorReason { code: 1016, reason: String::from("upload failed, one or more uploaded files was missing a file extension") },
+            E::UploadMissingFileName                => ErrorReason { code: 1017, reason: String::from("upload failed, one or more uploaded files had an empty filename") },
+            E::UploadTooLargeTotal                  => ErrorReason { code: 1018, reason: String::from("upload aborted, total upload size of file(s) was too large") },
+            E::UploadedFileTooLarge                 => ErrorReason { code: 1019, reason: String::from("upload aborted, one or more uploaded files exceeded the upload limit") },
+            E::UploadTooManyParts{ max}     => ErrorReason { code: 1020, reason: format!("upload failed, batch size too large (max={} files per upload)", max) },
+            E::ExtractorError(e)   => ErrorReason { code: 1021, reason: e.to_api_error_reason()? },
+            E::ScanSessionNotFound                  => ErrorReason { code: 1022, reason: String::from("scan session not found") },
+            _ => return None
         };
         
         Some(data)

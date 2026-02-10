@@ -83,7 +83,7 @@ impl EmailVerification {
     /// fetches an email verification record
     pub async fn by_email(email:&str, database: &DatabaseConnection) -> Result<Option<EmailVerification>> {
         let sql = "SELECT id,email,hash,verified_at,created_at,updated_at FROM `email_verification` WHERE email = ? LIMIT 1";
-        let helper_opt: Option<FromDatabaseHelper> = sqlx::query_as(sql)
+        let helper_opt: Option<DatabaseHelper> = sqlx::query_as(sql)
             .bind(email)
             .fetch_optional(&database.pool)
             .await?;
@@ -98,7 +98,7 @@ impl EmailVerification {
     /// fetches an email verification record
     pub async fn by_id(id:i64, database: &DatabaseConnection) -> Result<Option<EmailVerification>> {
         let sql = "SELECT id,email,hash,verified_at,created_at,updated_at FROM `email_verification` WHERE id = ? LIMIT 1";
-        let helper_opt: Option<FromDatabaseHelper> = sqlx::query_as(sql)
+        let helper_opt: Option<DatabaseHelper> = sqlx::query_as(sql)
             .bind(id)
             .fetch_optional(&database.pool)
             .await?;
@@ -191,7 +191,7 @@ impl EmailVerification {
 
 
 #[derive(Debug,FromRow)]
-struct FromDatabaseHelper {
+struct DatabaseHelper {
     pub id: i64,
     pub email: String,
     pub hash: Vec<u8>,
@@ -200,7 +200,7 @@ struct FromDatabaseHelper {
     pub updated_at: DateTime<Utc>
 }
 
-impl FromDatabaseHelper {
+impl DatabaseHelper {
     fn transform(self) -> Result<EmailVerification> {
         let verified_time = self.verified_at.map(|t| t.to_local_time());
 
