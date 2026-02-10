@@ -10,7 +10,7 @@ use crate::{
 type Result<T> = std::result::Result<T,Error>;
 
 #[derive(FromRow)]
-pub struct SuppressedEmailHelper {
+struct DatabaseHelper {
     email:String,
     status:u8,
     reason:String,
@@ -20,8 +20,8 @@ pub struct SuppressedEmailHelper {
     last_at: DateTime<Utc>
 }
 
-impl SuppressedEmailHelper {
-    pub fn transform(self) -> Result<SuppressedEmail> {
+impl DatabaseHelper {
+    fn transform(self) -> Result<SuppressedEmail> {
         Ok(SuppressedEmail { email: self.email,
             status: SuppressionStatus::from_u8(self.status)?,
             reason: self.reason,
@@ -83,7 +83,7 @@ impl SuppressedEmail {
 impl SuppressedEmail {
     pub async fn by_email(email: &str, database:&DatabaseConnection) -> Result<Option<SuppressedEmail>> {
         let sql = "SELECT email,status,reason,notes,count,first_at,last_at FROM `email_bounce_list` WHERE email = ?";
-        let record_opt: Option<SuppressedEmailHelper> = sqlx::query_as(sql)
+        let record_opt: Option<DatabaseHelper> = sqlx::query_as(sql)
             .bind(email)
             .fetch_optional(&database.pool)
             .await?;

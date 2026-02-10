@@ -1,12 +1,11 @@
 use crate::{
     enums::{AuthContext,User},
-    types::users::{BusinessUser,CommunityUser,SystemUser}
+    types::users::{StandardUser,SystemUser}
 };
 
 pub trait ToUser {
     fn to_user(&self) -> Option<&Box<User>>;
-    fn to_business_user(&self) -> Option<&BusinessUser>;
-    fn to_community_user(&self) -> Option<&CommunityUser>;
+    fn to_standard_user(&self) -> Option<&StandardUser>;
     fn to_system_user(&self) -> Option<&SystemUser>;
 }
 
@@ -16,7 +15,7 @@ impl ToUser for Option<&AuthContext> {
     fn to_user(&self) -> Option<&Box<User>> {
         let auth_context = match *self {
             Some(ac) => ac,
-            None => return None 
+            None => return None
         };
 
         match auth_context {
@@ -26,10 +25,10 @@ impl ToUser for Option<&AuthContext> {
     }
 
     #[inline]
-    fn to_business_user(&self) -> Option<&BusinessUser> {
+    fn to_standard_user(&self) -> Option<&StandardUser> {
         let auth_context = match *self {
             Some(ac) => ac,
-            None => return None 
+            None => return None
         };
 
         let boxed_user = match auth_context {
@@ -38,25 +37,7 @@ impl ToUser for Option<&AuthContext> {
         };
 
         match &**boxed_user {
-            User::Business(b) => Some(b),
-            _ => None
-        }
-    }
-
-    #[inline]
-    fn to_community_user(&self) -> Option<&CommunityUser> {
-        let auth_context = match *self {
-            Some(ac) => ac,
-            None => return None 
-        };
-
-        let boxed_user = match auth_context {
-            AuthContext::Some(b) => b,
-            AuthContext::None => return None
-        };
-
-        match &**boxed_user {
-            User::Community(c) => Some(&c),
+            User::Standard(s) => Some(s),
             _ => None
         }
     }
@@ -65,7 +46,7 @@ impl ToUser for Option<&AuthContext> {
     fn to_system_user(&self) -> Option<&SystemUser> {
         let auth_context = match *self {
             Some(ac) => ac,
-            None => return None 
+            None => return None
         };
 
         let boxed_user = match auth_context {

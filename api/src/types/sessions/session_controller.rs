@@ -88,7 +88,7 @@ impl SessionController {
         // get the current master epoch in memory
         let current_epoch = self.user_epoch_controller
             .try_read()
-            .to_lock_error()?
+            .to_lock_error(Error::UserEpochLockNotAquired)?
             .current();
 
         // update on new changes
@@ -101,7 +101,9 @@ impl SessionController {
 
             // begin write lock
             {
-                let mut locked_list = self.user_epoch_controller.write().to_lock_error()?;
+                let mut locked_list = self.user_epoch_controller
+                    .write()
+                    .to_lock_error(Error::UserEpochLockNotAquired)?;
                 
                 for meta in change_list {
                     locked_list.update(meta.user_id, meta.user_epoch);
@@ -189,7 +191,7 @@ impl SessionController {
         {
             self.list[idx]
                 .write()
-                .to_lock_error()?
+                .to_lock_error(Error::SessionLockNotAquired)?
                 .remove(&key);
         }
         // end locked scope
@@ -249,7 +251,7 @@ impl SessionController {
         // begin locked write scope
         {
             self.list[idx].write()
-                .to_lock_error()?
+                .to_lock_error(Error::SessionLockNotAquired)?
                 .insert(*key, session);
         }
         // end locked write scope
@@ -276,7 +278,9 @@ impl SessionController {
         // begin write lock scope
         {
             // get write lock
-            let mut locked_list = self.list[idx].write().to_lock_error()?;
+            let mut locked_list = self.list[idx]
+                .write()
+                .to_lock_error(Error::SessionLockNotAquired)?;
 
             // and insert updated user
             match locked_list.entry(*key) {
@@ -319,7 +323,7 @@ impl SessionController {
         {
             self.list[idx]
                 .write()
-                .to_lock_error()?
+                .to_lock_error(Error::SessionLockNotAquired)?
                 .get_mut(&key)
                 .ok_or(Error::SessionNotFoundDuringRefresh)?
                 .update_next_refresh();
@@ -343,9 +347,9 @@ impl SessionController {
         let user = {
             self.list[idx]
                 .read()
-                .to_lock_error()?
+                .to_lock_error(Error::SessionLockNotAquired)?
                 .get(&key)
-                .ok_or(Error::SessionLockNotAquired)?
+                .ok_or(Error::SessionNotFound)?
                 .user
                 .clone()
         };
@@ -358,9 +362,9 @@ impl SessionController {
         // extract the updated epoch from the epoch controller
         let next_epoch = self.user_epoch_controller
             .read()
-            .to_lock_error()?
+            .to_lock_error(Error::UserEpochLockNotAquired)?
             .user_epoch(user_id)
-            .ok_or(Error::UserEpochLockNotAquired)?;
+            .ok_or(Error::UserEpochNotFound)?;
 
         // compare epochs
         if current_epoch < next_epoch {
@@ -393,7 +397,9 @@ impl SessionController {
         // begin read lock scope
         let user = {
             // get read lock
-            let locked_list = self.list[idx].read().to_lock_error()?;
+            let locked_list = self.list[idx]
+                .read()
+                .to_lock_error(Error::SessionLockNotAquired)?;
 
             // and retrieve sesssion
             let session = locked_list.get(&key).ok_or(Error::SessionNotFound)?;
@@ -467,11 +473,10 @@ mod tests {
             let key_set = KeySet::new().unwrap();
             let user = Builder::new()
                 .id(0)
-                .business_account_id(1)
                 .epoch(0)
                 .username(String::from("username"))
                 .hash(String::from("hash"))
-                .user_type(UserType::Business)
+                .user_type(UserType::Standard)
                 .user_status(crate::enums::UserAccountStatus::Enabled)
                 .permissions(UserPermissions::default())
                 .build()
@@ -511,11 +516,10 @@ mod tests {
         let denied_permissions = UserPermissions::default().with_admin(r);
         let user = Builder::new()
             .id(0)
-            .business_account_id(1)
             .epoch(0)
             .username(String::from("username"))
             .hash(String::from("hash"))
-            .user_type(UserType::Business)
+            .user_type(UserType::Standard)
             .user_status(crate::enums::UserAccountStatus::Enabled)
             .permissions(permissions)
             .build()
@@ -548,11 +552,10 @@ mod tests {
         let key_set = KeySet::new().unwrap();
         let user = Builder::new()
             .id(0)
-            .business_account_id(1)
             .epoch(0)
             .username(String::from("username"))
             .hash(String::from("hash"))
-            .user_type(UserType::Business)
+            .user_type(UserType::Standard)
             .user_status(crate::enums::UserAccountStatus::Enabled)
             .permissions(UserPermissions::default())
             .build()
@@ -573,11 +576,10 @@ mod tests {
             let key_set = KeySet::new().unwrap();
             let user = Builder::new()
                 .id(0)
-                .business_account_id(1)
                 .epoch(0)
                 .username(String::from("username"))
                 .hash(String::from("hash"))
-                .user_type(UserType::Business)
+                .user_type(UserType::Standard)
                 .user_status(crate::enums::UserAccountStatus::Enabled)
                 .permissions(UserPermissions::default())
                 .build()

@@ -19,12 +19,12 @@ struct DatabaseHelper {
 }
 
 impl DatabaseHelper {
-    /// consumes self and returns the BusinessUser
-    async fn transform(self, database: &DatabaseConnection) -> Result<CommunityUser> {
+    /// consumes self and returns the StandardUser
+    async fn transform(self, database: &DatabaseConnection) -> Result<StandardUser> {
         let status = self.user_status_id.to_user_account_status()?;
         let permissions = UserPermissions::by_user_id(self.id, database).await?;
-        
-        let user = CommunityUser {
+
+        let user = StandardUser {
             id: self.id,
             epoch: self.epoch,
             username: self.username,
@@ -38,7 +38,7 @@ impl DatabaseHelper {
 }
 
 #[derive(Clone,Debug,PartialEq)]
-pub struct CommunityUser {
+pub struct StandardUser {
     id: i64,
     epoch: u64,
     username: String,
@@ -47,20 +47,20 @@ pub struct CommunityUser {
     permissions: UserPermissions
 }
 
-impl User<CommunityUser> for CommunityUser {
+impl User<StandardUser> for StandardUser {
     fn id(&self) -> i64 { self.id }
-    
+
     fn epoch(&self) -> u64 { self.epoch }
-    
+
     fn hash(&self) -> &str { &self.hash }
 
     fn permissions(&self) -> UserPermissions { self.permissions }
-    
+
     fn username(&self) -> &str { &self.username }
-    
+
     fn status(&self) -> UserAccountStatus { self.status }
-    
-    fn user_type(&self) -> UserType { UserType::Community }
+
+    fn user_type(&self) -> UserType { UserType::Standard }
 
     fn new(builder:super::Builder) -> Result<Self> {
         type E = Error;
@@ -71,7 +71,7 @@ impl User<CommunityUser> for CommunityUser {
         let status= builder.user_status.ok_or(E::RequiredUserBuildDataMissing)?;
         let permissions = builder.permissions.ok_or(E::RequiredUserBuildDataMissing)?;
 
-        let community_user:CommunityUser = CommunityUser {
+        let standard_user = StandardUser {
             id,
             epoch,
             username,
@@ -80,12 +80,12 @@ impl User<CommunityUser> for CommunityUser {
             permissions
         };
 
-        Ok(community_user)
+        Ok(standard_user)
     }
 
-    /// builds a business user from a database record by user_id
-    async fn by_id_unchecked(user_id: i64, database: &DatabaseConnection) -> Result<Option<CommunityUser>> {
-        let sql = "SELECT user.id,user.epoch,username.username,user.hash,user.user_status_id,user_type_id FROM `user` JOIN `community_users` ON user.id = community_users.user_id JOIN `username` ON user.id = username.user_id WHERE user.id = ?";
+    /// builds a standard user from a database record by user_id
+    async fn by_id_unchecked(user_id: i64, database: &DatabaseConnection) -> Result<Option<StandardUser>> {
+        let sql = "SELECT user.id,user.epoch,username.username,user.hash,user.user_status_id,user_type_id FROM `user` JOIN `standard_users` ON user.id = standard_users.user_id JOIN `username` ON user.id = username.user_id WHERE user.id = ?";
         let helper_opt:Option<DatabaseHelper> = sqlx::query_as(sql)
             .bind(user_id)
             .fetch_optional(&database.pool)
@@ -99,11 +99,11 @@ impl User<CommunityUser> for CommunityUser {
         }
     }
 
-    /// builds a business user from a database record by user_id
+    /// builds a standard user from a database record by user_id
     /// filters by any UserAccountStatus variant
-    async fn by_id_checked(user_id: i64, account_status: UserAccountStatus, database: &DatabaseConnection) -> Result<Option<CommunityUser>> {
+    async fn by_id_checked(user_id: i64, account_status: UserAccountStatus, database: &DatabaseConnection) -> Result<Option<StandardUser>> {
         let account_status_id = account_status as i8;
-        let sql = "SELECT user.id,user.epoch,username.username,user.hash,user.user_status_id,user_type_id FROM `user` JOIN `community_users` ON user.id = community_users.user_id JOIN `username` ON user.id = username.user_id WHERE user.id = ? AND user.user_status_id = ?";
+        let sql = "SELECT user.id,user.epoch,username.username,user.hash,user.user_status_id,user_type_id FROM `user` JOIN `standard_users` ON user.id = standard_users.user_id JOIN `username` ON user.id = username.user_id WHERE user.id = ? AND user.user_status_id = ?";
         let helper_opt:Option<DatabaseHelper> = sqlx::query_as(sql)
             .bind(user_id)
             .bind(account_status_id)

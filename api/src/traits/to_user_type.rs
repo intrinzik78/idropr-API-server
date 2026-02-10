@@ -11,10 +11,9 @@ impl ToUserType for i8 {
     fn to_user_type(&self) -> Result<UserType> {
         let user_type = match self {
             ..1 => return Err(Error::UserTypeOutOfBounds),
-            1   => UserType::Business,
-            2   => UserType::Community,
-            3   => UserType::System,
-            4.. => return Err(Error::UserTypeOutOfBounds)
+            1   => UserType::Standard,
+            2   => UserType::System,
+            3.. => return Err(Error::UserTypeOutOfBounds)
         };
 
         Ok(user_type)
@@ -25,8 +24,7 @@ impl ToUserType for User {
     #[inline]
     fn to_user_type(&self) -> Result<UserType> {
         let user_type = match self {
-            User::Business(_) => UserType::Business,
-            User::Community(_) => UserType::Community,
+            User::Standard(_) => UserType::Standard,
             User::System(_) => UserType::System
         };
 

@@ -3,7 +3,7 @@ use sqlx::prelude::FromRow;
 use crate::{
     enums::{Error, UserAccountStatus, UserType},
     traits::{ToUserType,User as UserTrait},
-    types::{permissions::UserPermissions, users::{BusinessUser, CommunityUser, SystemUser}}
+    types::{permissions::UserPermissions, users::{StandardUser, SystemUser}}
 };
 
 type Result<T> = std::result::Result<T,Error>;
@@ -17,36 +17,22 @@ struct UserDatabaseHelper {
 #[repr(i8)]
 #[derive(Clone,Debug,PartialEq)]
 pub enum User {
-    Business(BusinessUser)      = 1,
-    Community(CommunityUser)    = 2,
-    System(SystemUser)          = 3 
+    Standard(StandardUser) = 1,
+    System(SystemUser)     = 2
 }
 
 // async
 impl User {
 
-    /// builds a business user
-    async fn business_user(user_id: i64, account_status: Option<UserAccountStatus>, connection: &DatabaseConnection) -> Result<Option<User>> {
+    /// builds a standard user
+    async fn standard_user(user_id: i64, account_status: Option<UserAccountStatus>, database: &DatabaseConnection) -> Result<Option<User>> {
         let user_opt = match account_status {
-            Some(status) =>  BusinessUser::by_id_checked(user_id,status,connection).await?,
-            None =>                             BusinessUser::by_id_unchecked(user_id,connection).await?
+            Some(status) =>  StandardUser::by_id_checked(user_id,status,database).await?,
+            None =>                             StandardUser::by_id_unchecked(user_id,database).await?
         };
 
         match user_opt {
-            Some(u) => Ok(Some(User::Business(u))),
-            None => Ok(None)
-        }
-    }
-
-    /// builds a community user
-    async fn community_user(user_id: i64, account_status: Option<UserAccountStatus>, database: &DatabaseConnection) -> Result<Option<User>> {
-        let user_opt = match account_status {
-            Some(status) =>  CommunityUser::by_id_checked(user_id,status,database).await?,
-            None =>                             CommunityUser::by_id_unchecked(user_id,database).await?
-        };
-
-        match user_opt {
-            Some(u) => Ok(Some(User::Community(u))),
+            Some(u) => Ok(Some(User::Standard(u))),
             None => Ok(None)
         }
     }
@@ -70,9 +56,8 @@ impl User {
         let user_type = record.user_type_id.to_user_type()?;
 
         let user = match user_type {
-            UserType::Business  => Self::business_user(user_id,account_status,database).await?,
-            UserType::Community => Self::community_user(user_id,account_status,database).await?,
-            UserType::System    => Self::system_user(user_id,account_status,database).await?,
+            UserType::Standard => Self::standard_user(user_id,account_status,database).await?,
+            UserType::System   => Self::system_user(user_id,account_status,database).await?,
         };
 
         Ok(user)
@@ -166,11 +151,10 @@ impl User {
 
         for (user_id,user_type_id) in id_list {
             let user_type = user_type_id.to_user_type()?;
-            
+
             let user_opt = match user_type {
-                UserType::Business => Self::business_user(user_id,account_status,connection).await?,
-                UserType::Community => Self::community_user(user_id,account_status,connection).await?,
-                UserType::System => Self::system_user(user_id,account_status,connection).await?,
+                UserType::Standard => Self::standard_user(user_id,account_status,connection).await?,
+                UserType::System   => Self::system_user(user_id,account_status,connection).await?,
             };
 
             if let Some(user) = user_opt {
@@ -188,11 +172,10 @@ impl User {
 
         for (user_id,user_type_id) in id_list {
             let user_type = user_type_id.to_user_type()?;
-            
+
             let user_opt = match user_type {
-                UserType::Business => Self::business_user(user_id,account_status,connection).await?,
-                UserType::Community => Self::community_user(user_id,account_status,connection).await?,
-                UserType::System => Self::system_user(user_id,account_status,connection).await?,
+                UserType::Standard => Self::standard_user(user_id,account_status,connection).await?,
+                UserType::System   => Self::system_user(user_id,account_status,connection).await?,
             };
 
             if let Some(user) = user_opt {
@@ -205,57 +188,50 @@ impl User {
 
     pub fn id(&self) -> i64 {
         match self {
-            Self::Business(b) => b.id(),
-            Self::Community(c) => c.id(),
+            Self::Standard(s) => s.id(),
             Self::System(s) => s.id()
         }
     }
 
     pub fn epoch(&self) -> u64 {
         match self {
-            Self::Business(b)    => b.epoch(),
-            Self::Community(c)  => c.epoch(),
-            Self::System(s)        => s.epoch()
+            Self::Standard(s) => s.epoch(),
+            Self::System(s)   => s.epoch()
         }
     }
 
     pub fn hash(&self) -> &str {
         match self {
-            Self::Business(b)    => b.hash(),
-            Self::Community(c)  => c.hash(),
-            Self::System(s)        => s.hash()
+            Self::Standard(s) => s.hash(),
+            Self::System(s)   => s.hash()
         }
     }
 
     pub fn permissions(&self) -> UserPermissions {
         match self {
-            Self::Business(b)    => b.permissions(),
-            Self::Community(c)  => c.permissions(),
-            Self::System(s)        => s.permissions()
+            Self::Standard(s) => s.permissions(),
+            Self::System(s)   => s.permissions()
         }
     }
 
     pub fn username(&self) -> &str {
         match self {
-            Self::Business(b)    => b.username(),
-            Self::Community(c)  => c.username(),
-            Self::System(s)        => s.username()
+            Self::Standard(s) => s.username(),
+            Self::System(s)   => s.username()
         }
     }
 
     pub fn user_type(&self) -> UserType {
         match self {
-            Self::Business(b)    => b.user_type(),
-            Self::Community(c)  => c.user_type(),
-            Self::System(s)        => s.user_type()
+            Self::Standard(s) => s.user_type(),
+            Self::System(s)   => s.user_type()
         }
     }
 
     pub fn status(&self) -> UserAccountStatus {
         match self {
-            Self::Business(b)    => b.status(),
-            Self::Community(c)  => c.status(),
-            Self::System(s)        => s.status()
+            Self::Standard(s) => s.status(),
+            Self::System(s)   => s.status()
         }
     }
 

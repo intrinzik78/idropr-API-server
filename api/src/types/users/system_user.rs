@@ -19,7 +19,7 @@ struct DatabaseHelper {
 }
 
 impl DatabaseHelper {
-    /// consumes self and returns the BusinessUser
+    /// consumes self and returns the SystemUser
     async fn transform(self, database: &DatabaseConnection) -> Result<SystemUser> {
         let status = self.user_status_id.to_user_account_status()?;
         let permissions = UserPermissions::by_user_id(self.id, database).await?;
@@ -83,7 +83,7 @@ impl User<SystemUser> for SystemUser {
         Ok(system_user)
     }
 
-    /// builds a business user from a database record by user_id
+    /// builds a system user from a database record by user_id
     async fn by_id_unchecked(user_id: i64, database: &DatabaseConnection) -> Result<Option<SystemUser>> {
         let sql = "SELECT user.id,user.epoch,username.username,user.hash,user.user_status_id,user_type_id FROM `user` JOIN `system_users` ON user.id = system_users.user_id JOIN `username` ON user.id = username.user_id WHERE user.id = ?";
         let helper_opt:Option<DatabaseHelper> = sqlx::query_as(sql)
@@ -99,7 +99,8 @@ impl User<SystemUser> for SystemUser {
         }
     }
 
-    /// builds a business user from a database record by user_id
+    /// builds a system user from a database record by user_id
+    /// filters by any UserAccountStatus variant
     async fn by_id_checked(user_id: i64,account_status: UserAccountStatus, database: &DatabaseConnection) -> Result<Option<SystemUser>> {
         let account_status_id = account_status as i8;
         let sql = "SELECT user.id,user.epoch,username.username,user.hash,user.user_status_id,user_type_id FROM `user` JOIN `system_users` ON user.id = system_users.user_id JOIN `username` ON user.id = username.user_id WHERE user.id = ? AND user.user_status_id = ?";

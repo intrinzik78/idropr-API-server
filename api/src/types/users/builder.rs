@@ -1,7 +1,7 @@
 use crate::{
     enums::{Error, User, UserAccountStatus, UserType},
     traits::User as UserTrait,
-    types::{permissions::UserPermissions, users::{BusinessUser, CommunityUser, SystemUser}}
+    types::{permissions::UserPermissions, users::{StandardUser, SystemUser}}
 };
 
 type Result<T> = std::result::Result<T,Error>;
@@ -9,7 +9,6 @@ type Result<T> = std::result::Result<T,Error>;
 #[derive(Default)]
 pub struct Builder {
     pub id: Option<i64>,
-    pub business_account_id: Option<i64>,
     pub epoch:Option<u64>,
     pub username: Option<String>,
     pub hash: Option<String>,
@@ -25,11 +24,6 @@ impl Builder {
 
     pub fn id(mut self, user_id: i64) -> Self {
         self.id = Some(user_id);
-        self
-    }
-
-    pub fn business_account_id(mut self, business_account_id: i64) -> Self {
-        self.business_account_id = Some(business_account_id);
         self
     }
 
@@ -67,22 +61,16 @@ impl Builder {
         let user_type = self.user_type.clone().ok_or(Error::RequiredUserBuildDataMissing)?;
 
         let user = match &user_type {
-            UserType::Business  => self.build_business_user()?,
-            UserType::Community => self.build_community_user()?,
-            UserType::System    => self.build_system_user()?,
+            UserType::Standard => self.build_standard_user()?,
+            UserType::System   => self.build_system_user()?,
         };
 
         Ok(user)
     }
 
-    fn build_business_user(self) -> Result<User> {
-        let user = BusinessUser::new(self)?;
-        Ok(User::Business(user))
-    }
-
-    fn build_community_user(self) -> Result<User> {
-        let user = CommunityUser::new(self)?;
-        Ok(User::Community(user))
+    fn build_standard_user(self) -> Result<User> {
+        let user = StandardUser::new(self)?;
+        Ok(User::Standard(user))
     }
 
     fn build_system_user(self) -> Result<User> {
