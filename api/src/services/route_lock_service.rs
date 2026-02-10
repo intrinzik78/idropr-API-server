@@ -4,15 +4,14 @@ use actix_web::{
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
     web::Data,
     Error,
-    HttpMessage,
-    HttpResponse
+    HttpMessage
 };
 use futures::future::{ok, LocalBoxFuture, Ready};
 use std::task::{Context, Poll};
 
 use crate::{
-    enums::{AuthContext, Permission, sessions::{RefreshStatus,SessionControllerStatus}},
-    types::{ApiResponse, AppState, AuthorizationToken, permissions::{NeedCheck, PermissionCheck, UserPermissions}}
+    enums::{ApiResult,AuthContext, Error as ServerError, Permission, sessions::{RefreshStatus,SessionControllerStatus}},
+    types::{AppState, AuthorizationToken, permissions::{NeedCheck, PermissionCheck, UserPermissions}}
 };
 
 /// target for the middleware service
@@ -99,64 +98,72 @@ where
         self.service.poll_ready(ctx)
     }
 
-    fn call(& self, req: ServiceRequest) -> Self::Future {
+    fn call(&self, req: ServiceRequest) -> Self::Future {
         let service = self.service.clone();
-        let required_permissions = *self.required_permissions;
+        let required_permissions = (*self.required_permissions).clone();
+
         let token_res = AuthorizationToken::extract(&req)
-            .map (|s| s.to_owned())
+            .map(|s| s.to_owned())
             .map_err(|_e| actix_web::error::ErrorUnauthorized("Unauthorized"));
+
         let shared_res = req
             .app_data::<Data<AppState>>()
             .cloned()
-            .ok_or(actix_web::error::ErrorUnauthorized("Unauthorized"));
+            .ok_or_else(|| actix_web::error::ErrorInternalServerError("server error"));
 
         Box::pin(async move {
-            // unwrap token
             let token_b64 = token_res?;
-            
-            // unwrap shared data
             let shared = shared_res?;
-            
-            // run permission check, unwrap or handle response
+
             let check = match RouteLockService::<S>::logic(shared, &token_b64, required_permissions).await {
                 Ok(c) => c,
-                Err(_e) => {
-                    // log error here
-                    println!("{_e}");
-                    // return unauthorized response on check-error
-                    let res = req
-                        .into_response(ApiResponse::unauthorized().error())
-                        .map_into_right_body();
-                    
-                    return Ok(res)
+                Err(e) => {
+                    type E = ServerError;
+                    eprintln!("RouteLock error: {e:?}");
+
+                    let res = match e {
+                        // ---- auth / token invalid ----
+                        E::SessionNotFound
+                        | E::SessionExpired
+                        | E::SessionHashNotVerified
+                        | E::UserAccountStatusNotEnabled
+                        | E::Base64(_)
+                        | E::SessionTokenLengthTooShort
+                        | E::SessionTokenLengthTooLong
+                        | E::SessionTokenIncorrectType
+                            => req.into_response(ApiResult::unauthorized().to_http()).map_into_right_body(),
+
+                        // ---- internal failures ----
+                        E::SessionLockNotAquired
+                        | E::DatabaseTransactionVerification
+                        | E::DatabaseError(_)
+                        | E::UserEpochLockNotAquired
+                            => req.into_response(ApiResult::server_error().to_http()).map_into_right_body(),
+
+                        // ---- default: be conservative (internal) ----
+                        _ => req.into_response(ApiResult::server_error().to_http()).map_into_right_body(),
+                    };
+
+                    return Ok(res);
                 }
             };
 
-            // match explicitly on check.permission
             match check.permission {
                 Permission::Denied => {
-                    // short circuit on fail
                     let res = req
-                        .into_response(HttpResponse::Unauthorized()
-                        .body("Unauthorized"))
+                        .into_response(ApiResult::forbidden().to_http())
                         .map_into_right_body();
-                    
-                    return Ok(res)
-                },
+                    return Ok(res);
+                }
                 Permission::Granted => {
-                    // forward context and permissions to enpdoint
                     req.extensions_mut().insert(NeedCheck(required_permissions));
                     req.extensions_mut().insert(check.auth_context);
                 }
-            };
+            }
 
-            // build future and map the response into the success body
-            let res = service.call(req)
-                .await?
-                .map_into_left_body();
-
-            // map response into success branch
+            let res = service.call(req).await?.map_into_left_body();
             Ok(res)
         })
     }
+
 }

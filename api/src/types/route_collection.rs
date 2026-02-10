@@ -163,17 +163,23 @@ impl RouteCollection {
 
         cfg.service(
             web::scope(BASE)
-                // PRIVATE, RW DocExtraction rights required
+                // PRIVATE, RW DocExtraction rights required (Editor)
                 .service(
                     web::resource("/sessions")
                         .wrap(RouteLock::default(&required_permissions))
                         .route(web::post().to(P::private_sessions_response))
                 )
-                // PRIVATE, RW DocExtraction rights required
+                // PRIVATE, RW DocExtraction rights required (Editor)
                 .service(
-                    web::resource("/sessions/{session_id}/single")
+                    web::resource("/sessions/{session_id}/batch")
                         .wrap(RouteLock::default(&required_permissions))
-                        .route(web::post().to(P::private_single_upload_response))
+                        .route(web::post().to(P::private_mulitpart_upload_response))
+                )
+                // PRIVATE, RW DocExtraction rights required (Editor)
+                .service(
+                    web::resource("/sessions/{session_id}/process")
+                        .wrap(RouteLock::default(&required_permissions))
+                        .route(web::post().to(P::private_process_response))
                 )
         );
     }

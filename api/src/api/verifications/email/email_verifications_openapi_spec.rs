@@ -2,8 +2,8 @@ use actix_web::{Responder, web};
 use serde::Serialize;
 use utoipa::ToSchema;
 use crate::{
-    enums::ApiResult,
-    types::{ApiErrorData, AppState}
+    enums::{ApiResult,ErrorReason},
+    types::{ApiError,AppState}
 };
 use super::email_post::{EmailVerificationPost,CreateEmailVerification};
 use super::email_patch::{PatchEmailVerification,PatchReqPath};
@@ -107,8 +107,11 @@ pub async fn patch_email_verification(path:web::Path<PatchReqPath>, shared: web:
     PatchEmailVerification::response(path, shared).await
 }
 
-#[derive(Serialize, ToSchema)]
-pub struct ApiResultError(#[schema(inline)] pub ApiResult<ApiErrorData>);
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ApiResultError {
+    #[serde(rename = "Error")]
+    pub error: ApiError<ErrorReason>,
+}
 
 #[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct SuccessMessage(#[schema(inline)] pub ApiResult<String>);

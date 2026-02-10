@@ -3,8 +3,7 @@ use serde::Serialize;
 use utoipa::{OpenApi, openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},Modify};
 use crate::{
     api::{extractions,locations, secrets, sessions, verifications},
-    enums::ActivityType,
-    types::ApiResponse
+    enums::{ActivityType,ApiResult}
 };
 
 #[derive(Default, OpenApi)]
@@ -28,7 +27,7 @@ use crate::{
         schemas(
             sessions::CreateSessionBody,
             sessions::AccessToken,
-            ApiResponse<sessions::AccessToken>,
+            ApiResult<sessions::AccessToken>,
             ActivityType
         ),
     ),

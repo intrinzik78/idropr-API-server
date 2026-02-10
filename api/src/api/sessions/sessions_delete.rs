@@ -1,9 +1,9 @@
 use actix_web::{web,HttpRequest,Responder};
 
 use crate::{
-    enums::sessions::SessionControllerStatus,
+    enums::{ApiResult,sessions::SessionControllerStatus},
     traits::ToHeaderAuthToken,
-    types::{permissions::WereChecked, ApiResponse, AppState}
+    types::{permissions::WereChecked, AppState}
 };
 
 #[derive(Debug)]
@@ -15,19 +15,19 @@ impl SessionsDelete {
         // extract token
         let token = match req.to_auth() {
             Ok(t) => t,
-            Err(_e) => return ApiResponse::unauthorized().ok()
+            Err(_e) => return ApiResult::unauthorized().to_http()
         };
 
         // session controller reference
         let session_controller = match shared.sessions() {
             SessionControllerStatus::Enabled(controller) => controller,
-            SessionControllerStatus::Disabled => return ApiResponse::server_error().error()
+            SessionControllerStatus::Disabled => return ApiResult::server_error().to_http()
         };
 
         // delete session
         match session_controller.delete(&token) {
-            Ok(()) => ApiResponse::no_content(),
-            Err(_) => ApiResponse::server_error().error()
+            Ok(()) => ApiResult::no_content().to_http(),
+            Err(_) => ApiResult::server_error().to_http()
         }
     }
 }

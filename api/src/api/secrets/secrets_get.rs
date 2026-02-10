@@ -1,7 +1,7 @@
 use actix_web::{Responder,web::{Data,Path}};
 use serde::Deserialize;
 
-use crate::types::{ApiResponse,AppState, permissions::WereChecked};
+use crate::{enums::ApiResult, types::{AppState, permissions::WereChecked}};
 
 #[derive(Deserialize)]
 pub struct ReqPath {
@@ -17,7 +17,7 @@ impl SecretsGet {
 
         let _id = path.into_inner().id;
 
-        ApiResponse::success()
+        ApiResult::success().to_http()
     }
 }
 

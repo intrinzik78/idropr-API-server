@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::{
-    enums::{ActivityType,AuthContext,Error,Resource},
+    enums::{ActivityType, ApiResult, AuthContext, Error, Resource},
     traits::ToUser,
-    types::{ApiErrorData, ApiResponse, AppState, business::Location, permissions::{UserPermissions, WereChecked}}};
+    types::{AppState, business::Location, permissions::{UserPermissions, WereChecked}}};
 
 type Result<T> = std::result::Result<T,Error>;
 
@@ -231,18 +231,23 @@ impl LocationsGet {
         let query = Self::public_logic(path, shared).await;
 
         match query {
-            Ok(r) => ApiResponse::default().with_data(r).with_code(200).ok(),
+            Ok(r) => {
+                match ApiResult::ok(200, "ok").with_data(r) {
+                    Ok(s) => s.to_http(),
+                    Err(_) => ApiResult::server_error().to_http()
+                }
+            },
             Err(e) => {
                 let error_opt = e.to_api_error_message();
 
                 if let Some(d) = error_opt {
                     match e {
-                        E::LocationRecordNotFoundById       => ApiResponse::<ApiErrorData>::default().with_code(404).with_data(d).error(),
-                        E::InsufficientLocationPermissions  => ApiResponse::<ApiErrorData>::default().with_code(403).with_data(d).error(),
-                        _ => ApiResponse::server_error().error()
+                        E::LocationRecordNotFoundById       => ApiResult::not_found().with_reason(d).to_http(),
+                        E::InsufficientLocationPermissions  => ApiResult::server_error().with_reason(d).to_http(),
+                        _ => ApiResult::server_error().to_http()
                     }
                 } else {
-                    ApiResponse::server_error().error()
+                    ApiResult::server_error().to_http()
                 }
             }
         }
@@ -255,18 +260,23 @@ impl LocationsGet {
         let query = Self::private_logic(req, path, shared).await;
 
         match query {
-            Ok(r) => ApiResponse::default().with_data(r).with_code(200).ok(),
+            Ok(r) => {
+                match ApiResult::ok(200, "ok").with_data(r) {
+                    Ok(s) => s.to_http(),
+                    Err(_) => ApiResult::server_error().to_http()
+                }
+            },
             Err(e) => {
                 let error_opt = e.to_api_error_message();
 
                 if let Some(d) = error_opt {
                     match e {
-                        E::LocationRecordNotFoundById       => ApiResponse::<ApiErrorData>::default().with_code(404).with_data(d).error(),
-                        E::InsufficientLocationPermissions  => ApiResponse::<ApiErrorData>::default().with_code(403).with_data(d).error(),
-                        _ => ApiResponse::server_error().error()
+                        E::LocationRecordNotFoundById       => ApiResult::not_found().with_reason(d).to_http(),
+                        E::InsufficientLocationPermissions  => ApiResult::forbidden().with_reason(d).to_http(),
+                        _ => ApiResult::server_error().to_http()
                     }
                 } else {
-                    ApiResponse::server_error().error()
+                    ApiResult::server_error().to_http()
                 }
             }
         }
@@ -287,22 +297,22 @@ impl LocationsGet {
 
                 if let Some(d) = d_opt {
                     let response = match e {
-                        E::MissingLocationQueryParam(_)     => ApiResponse::default().with_code(400).with_data(d).error(),
-                        E::InsufficientLocationPermissions  => ApiResponse::default().with_code(403).with_data(d).error(),
-                        _ =>                                   ApiResponse::server_error().error()
+                        E::MissingLocationQueryParam(_)     => ApiResult::bad_request().with_reason(d).to_http(),
+                        E::InsufficientLocationPermissions  => ApiResult::server_error().with_reason(d).to_http(),
+                        _ =>                                   ApiResult::server_error().to_http()
                     };
                     
                     return response
                 } else {
-                    return ApiResponse::server_error().error()
+                    return ApiResult::server_error().to_http()
                 }
             }
         };
 
-        ApiResponse::default()
-            .with_code(200)
-            .with_data(location_list)
-            .ok()
+        match ApiResult::ok(200, "ok").with_data(location_list) {
+            Ok(s) => s.to_http(),
+            Err(_) => ApiResult::server_error().to_http()
+        }
     }
 
     /// returns a list of public locations, filtered by activity type, nearest to a zipcode
@@ -320,23 +330,23 @@ impl LocationsGet {
 
                 if let Some(d) = d_opt {
                     let response = match e {
-                        E::ActivityTypeOutOfRange           => ApiResponse::default().with_code(400).with_data(d).error(),
-                        E::MissingLocationQueryParam(_)     => ApiResponse::default().with_code(400).with_data(d).error(),
-                        E::InsufficientLocationPermissions  => ApiResponse::default().with_code(403).with_data(d).error(),
-                        _ =>                                   ApiResponse::server_error().error()
+                        E::ActivityTypeOutOfRange           => ApiResult::bad_request().with_reason(d).to_http(),
+                        E::MissingLocationQueryParam(_)     => ApiResult::bad_request().with_reason(d).to_http(),
+                        E::InsufficientLocationPermissions  => ApiResult::server_error().with_reason(d).to_http(),
+                        _ =>                                   ApiResult::server_error().to_http()
                     };
                     
                     return response
                 } else {
-                    return ApiResponse::server_error().error()
+                    return ApiResult::server_error().to_http()
                 }
             }
         };
 
-        ApiResponse::default()
-            .with_code(200)
-            .with_data(location_list)
-            .ok()
+        match ApiResult::ok(200, "ok").with_data(location_list) {
+            Ok(s) => s.to_http(),
+            Err(_) => ApiResult::server_error().to_http()
+        }
     }
 
     /// returns a list of public locations nearest to a zipcode provided in the query parameters
@@ -346,6 +356,6 @@ impl LocationsGet {
 
         // println!("{},{}",lat,lon);
         
-        ApiResponse::bad_request().error()
+        ApiResult::bad_request().to_http()
     }
 }

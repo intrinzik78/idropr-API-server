@@ -13,6 +13,7 @@ pub enum Uuid {
     Crypto([u8;32]),
     WebSafe(String),
     WebSafeNums(String),
+    Crypto16([u8;16])
 }
 
 impl Uuid {
@@ -21,6 +22,13 @@ impl Uuid {
         OsRng.try_fill_bytes(&mut buf)?;
         
         Ok(Uuid::Crypto(buf))
+    }
+
+    pub fn crypto16() -> Result<Uuid> {
+        let mut buf = [0u8;16];
+        OsRng.try_fill_bytes(&mut buf)?;
+        
+        Ok(Uuid::Crypto16(buf))
     }
 
     pub fn web_safe(length_opt: Option<NonZeroU8>) -> Result<Uuid> {

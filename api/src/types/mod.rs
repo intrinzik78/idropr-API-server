@@ -8,9 +8,9 @@ pub mod secrets;
 pub mod sessions;
 pub mod users;
 
-mod api_error_data;
+mod api_error;
 mod authorization_token;
-mod api_response;
+mod api_success;
 mod api_server;
 mod app_state;
 mod cli;
@@ -21,9 +21,9 @@ mod rate_limit_sweeper;
 mod route_collection;
 mod settings;
 
-pub use api_error_data::ApiErrorData;
+pub use api_error::ApiError;
 pub use authorization_token::AuthorizationToken;
-pub use api_response::ApiResponse;
+pub use api_success::ApiSuccess;
 pub use api_server::ApiServer;
 pub use app_state::AppState;
 pub use cli::Cli;

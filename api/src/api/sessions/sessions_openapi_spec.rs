@@ -2,8 +2,8 @@ use actix_web::{web,HttpRequest,Responder};
 use serde::Serialize;
 use utoipa::ToSchema;
 use crate::{
-    enums::ApiResult,
-    types::{ApiErrorData,AppState,permissions::WereChecked}
+    enums::{ApiResult, ErrorReason},
+    types::{ApiError, AppState, permissions::WereChecked}
 };
 use super::sessions_post::{AccessToken, CreateSessionBody, SessionsPost};
 use super::sessions_delete::SessionsDelete;
@@ -34,6 +34,7 @@ use super::sessions_delete::SessionsDelete;
             body = ApiResultError,
             example = json!({ "Error": { "code": 401, "message": "Unauthorized" } })
         ),
+        (status = 403, description = "forbidden")
     )
 )]
 
@@ -81,5 +82,8 @@ pub async fn delete_sessions(_permissions: WereChecked, req: HttpRequest, shared
 #[derive(Serialize, ToSchema)]
 pub struct ApiResultToken(#[schema(inline)] pub ApiResult<AccessToken<'static>>);
 
-#[derive(Serialize, ToSchema)]
-pub struct ApiResultError(#[schema(inline)] pub ApiResult<ApiErrorData>);
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ApiResultError {
+    #[serde(rename = "Error")]
+    pub error: ApiError<ErrorReason>
+}

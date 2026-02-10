@@ -1106,6 +1106,7 @@ dependencies = [
 name = "doc-extractor"
 version = "0.0.1"
 dependencies = [
+ "blake3",
  "chrono",
  "derive_more 1.0.0",
  "reqwest",

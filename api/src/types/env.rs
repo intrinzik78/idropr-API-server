@@ -33,7 +33,11 @@ pub struct Env {
     pub limiter_refill_window: TimeWindow,
 
     // session controller settings
-    pub sessions_initial_capacity: usize
+    pub sessions_initial_capacity: usize,
+
+    // extractor config settings
+    pub extractor_temp_dir: String,
+    pub extractor_final_dir: String
 }
 
 impl Default for Env {
@@ -98,6 +102,14 @@ impl Default for Env {
             .parse()
             .expect("could not parse SESSIONS_INITIAL_CAPACITY in .env");
 
+        let extractor_temp_dir: String = env.get("EXTRACTOR_TEMP_DIR")
+            .expect("EXTRACTOR_TEMP_DIR not found in .env")
+            .to_owned();
+
+        let extractor_final_dir: String = env.get("EXTRACTOR_FINAL_DIR")
+            .expect("EXTRACTOR_FINAL_DIR not found in .env")
+            .to_owned();
+
         Env {
             ip_address,
             master_password,
@@ -109,7 +121,9 @@ impl Default for Env {
             limiter_refill_window,
             limiter_tokens_per_bucket,
             server_threads,
-            sessions_initial_capacity
+            sessions_initial_capacity,
+            extractor_temp_dir,
+            extractor_final_dir
         }
     }
 }
@@ -134,7 +148,9 @@ mod tests {
             limiter_tokens_per_bucket: String::from("100").parse().unwrap(),
             limiter_refill_rate: String::from("100").parse().unwrap(),
             limiter_refill_window: String::from("HOUR").to_time_window().unwrap(),
-            sessions_initial_capacity: String::from("1000").parse().unwrap()
+            sessions_initial_capacity: String::from("1000").parse().unwrap(),
+            extractor_temp_dir: String::from("extractor_temp_dir"),
+            extractor_final_dir: String::from("extractor_final_dir"),
         };
 
         // test function calls return correct data
@@ -148,6 +164,8 @@ mod tests {
         assert_eq!(manual_env.limiter_refill_window,TimeWindow::Hour);
         assert_eq!(manual_env.server_threads, 2);
         assert_eq!(manual_env.sessions_initial_capacity, 1000);
+        assert_eq!(manual_env.extractor_temp_dir, String::from("extractor_temp_dir"));
+        assert_eq!(manual_env.extractor_final_dir, String::from("extractor_final_dir"));
 
         // test constructor generated properties contain some values
         let builder = Env::default();
@@ -159,6 +177,8 @@ mod tests {
         assert!(builder.limiter_tokens_per_bucket > 0);
         assert!(builder.server_threads > 0);
         assert!(builder.sessions_initial_capacity > 0);
+        assert!(!builder.extractor_temp_dir.is_empty());
+        assert!(!builder.extractor_final_dir.is_empty());
 
         // exhaustive
         let time_window = match builder.limiter_refill_window {

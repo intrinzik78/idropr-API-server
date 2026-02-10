@@ -21,7 +21,7 @@ impl GarbageCollector {
 
         // begin locked read scope
         {
-            let mut locked_list = list.write().to_lock_error()?;
+            let mut locked_list = list.write().to_lock_error(Error::SessionLockNotAquired)?;
             let mut list = locked_list.iter_mut();
 
             while let Some((key,session)) = list.next() {

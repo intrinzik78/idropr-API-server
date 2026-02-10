@@ -11,7 +11,7 @@ use crate::{
         RateLimiterStatus,
         sessions::SessionControllerStatus
     },
-    types::{secrets::SecretController,Settings}
+    types::{Settings, scans::ScanController, secrets::SecretController}
 };
 
 type Result<T> = std::result::Result<T,Error>;
@@ -24,6 +24,7 @@ pub struct AppState {
     limiter: RateLimiterStatus,
     postmark: Postmark,
     secrets: SecretController,
+    scanner: ScanController,
     sessions: SessionControllerStatus,
     settings: Settings
 }
@@ -50,12 +51,16 @@ impl AppState {
             ConnectionStatus::Disconnected => return Err(Error::DatabaseConnectionTestFailed)
         }
 
+        // instantiate the scan controller
+        let scanner  = ScanController::default();
+
         // construct app state
         let app_state = AppState {
             database,
             settings,
             limiter: RateLimiterStatus::Disabled,
             postmark,
+            scanner,
             secrets,
             sessions: SessionControllerStatus::Disabled
         };
@@ -87,6 +92,11 @@ impl AppState {
     /// rate limiter getter
     pub fn rate_limiter(&self) -> &RateLimiterStatus {
         &self.limiter
+    }
+
+    /// scan controller getter
+    pub fn scanner(&self) -> &ScanController {
+        &self.scanner
     }
 
     /// session controller getter
@@ -158,10 +168,13 @@ mod tests {
 
         let secrets = SecretController::new(settings.master_password.clone(), &database).await.expect("failed to build secrets controller");
 
+        let scanner = ScanController::default();
+
         // manual build test
         let _manual_builder = AppState {
             database,
             postmark,
+            scanner,
             secrets,
             settings,
             limiter: RateLimiterStatus::Disabled,

@@ -1,9 +1,9 @@
-use actix_web::{web,Responder};
+use actix_web::{web::{Data, Json},Responder};
 use serde::Serialize;
 use utoipa::ToSchema;
 use crate::{
-    enums::ApiResult,
-    types::{ApiErrorData,AppState,permissions::WereChecked}
+    enums::ErrorReason,
+    types::{ApiError,AppState, permissions::WereChecked}
 };
 use super::secrets_post::{SecretsPost,CreateSecretBody};
 
@@ -15,18 +15,15 @@ use super::secrets_post::{SecretsPost,CreateSecretBody};
     security(("bearerAuth" = [])),
     request_body = CreateSecretBody,
     responses(
-        (status = 201, description = "resource created"),
+        (status = 204,description = "no content"),
+        (status = 401, description = "unauthorized",),
+        (status = 403, description = "forbidden"),
         (
-            status = 401, description = "unauthorized",
+            status = 404,
+            description = "not found",
             content_type = "application/json",
             body = ApiResultError,
-            example = json!({ "Error": { "code": 401, "message": "Unauthorized" } })
-        ),
-        (
-            status = 400,
-            description = "bad request",
-            body = ApiResultError,
-            example = json!({"Error": {"code":400,"message":"duplicate: api name already in use"}})
+            example = json!({"Error": {"code":404,"message":"not found", "data":{ "code": 1008, "reason": "record does not exist"}}})
         ),
         (status = 429, description = "rate limited",
             content_type = "application/json",
@@ -47,9 +44,9 @@ use super::secrets_post::{SecretsPost,CreateSecretBody};
     )
 )]
 
-pub async fn post_secrets(_permissions: WereChecked, post: web::Json<CreateSecretBody>, shared: web::Data<AppState>) -> impl Responder {
+pub async fn post_secrets(_permissions: WereChecked, post: Json<CreateSecretBody>, shared: Data<AppState>) -> impl Responder {
     SecretsPost::logic(_permissions, post, shared).await
 }
 
 #[derive(Serialize, ToSchema)]
-pub struct ApiResultError(#[schema(inline)] pub ApiResult<ApiErrorData>);
+pub enum ApiResultError { Error(ApiError<ErrorReason>) }

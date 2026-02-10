@@ -1,12 +1,22 @@
+use std::{ffi::OsStr, path::{Path,PathBuf}};
+
 use actix_multipart::Multipart;
-use actix_web::{web::{Data,Path},HttpResponse};
+use actix_web::{web::{Data,Path as ActixPath},HttpResponse};
+use blake3::Hasher;
+use database::types::DatabaseConnection;
+use doc_extractor::{
+    enums::{FileType, ScanStatus},
+    types::UploadedFile
+};
 use futures::TryStreamExt;
 use serde::{Deserialize, Serialize};
+
+use tokio::{fs, fs::File, io::AsyncWriteExt};
 use utoipa::ToSchema;
 
 use crate::{
-    enums::{Error},
-    types::{ApiResponse, AppState, permissions::WereChecked, scans::ScanSession}
+    enums::{ApiResult, Error, Uuid}, traits::ToBase64,
+    types::{AppState, permissions::WereChecked, scans::{Extraction,ScanController,ScanSession}}
 };
 
 type Result<T> = std::result::Result<T,Error>;
@@ -22,79 +32,190 @@ pub struct NewScanSession {
 
 #[derive(Deserialize,ToSchema)]
 pub struct ReqPath {
-    session_id:String
+    session_id: i64
 }
 
-pub struct UploadedFile {
-    pub client_file_name: Option<String>,
-    pub bytes: Vec<u8>
+#[derive(Serialize, ToSchema)]
+pub struct BatchIngestItem {
+    pub client_file_name: String,
+    pub id: i64,
+    pub deduped: bool,
+    pub bytes: u64,
+    pub mime_type: String
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct BatchIngestResponse {
+    pub session_id: i64,
+    pub uploaded: Vec<BatchIngestItem>
 }
 
 pub struct ScanSessionPost;
 
 impl ScanSessionPost {
 
-    async fn batch_upload_logic(payload: &mut Multipart) -> Result<Vec<UploadedFile>> {
-        let mut files: Vec<UploadedFile> = Vec::new();
-        let mut total_bytes: u64 = 0;
+    fn get_extension_from_filename(filename: &str) -> Result<String> {
+        let ext = Path::new(&filename.to_ascii_lowercase())
+            .extension()
+            .and_then(OsStr::to_str)
+            .ok_or(Error::UploadMissingFileExt)?
+            .to_string();
+        
+        Ok(ext)
+    }
+
+    async fn batch_upload_logic(session_id:i64, database:&DatabaseConnection, scanner: &ScanController, payload: &mut Multipart) -> Result<Vec<BatchIngestItem>> {
+        
+        // validate scan session exists
+        if !ScanSession::exists(session_id, database).await? {
+            return Err(Error::ScanSessionNotFound);
+        }
+
+        let mut files: Vec<BatchIngestItem> = Vec::new();
+
+        // track total upload size + total parts
+        let mut total_bytes:u64 = 0;
+        let mut total_files:usize = 0;
 
         while let Some(mut field) = payload.try_next().await.map_err(Error::Multipart)? {
             // extract the field name
             let field_name = field.name().ok_or(Error::UploadMissingFieldName)?;
-
+            
             match field_name {
                 "file" => {
-                    if files.len() >= MAX_PARTS_PER_REQUEST {
+                    // track + return early on too many parts
+                    total_files += 1;
+
+                    if total_files > MAX_PARTS_PER_REQUEST {
                         return Err(Error::UploadTooManyParts {
                             max: MAX_PARTS_PER_REQUEST,
                         });
                     }
 
-                    // extract the client file name for errors
-                    let client_file_name = field
-                        .content_disposition()
-                        .and_then(|d| d.get_filename().map(|s| s.to_string()));
+                    // extract the client provided file name for error tracking
+                    let client_file_name = {
+                        field.content_disposition()
+                            .and_then(|d| d.get_filename().map(|s| s.to_string()))
+                            .ok_or(Error::UploadMissingFileName)?
+                    };
 
-                    let mut bytes: Vec<u8> = Vec::new();
+                    // extract file extension
+                    let ext_str = Self::get_extension_from_filename(&client_file_name)?;
+                    let file_type = FileType::from_ext(&ext_str)?;
 
+                    // build path and storage key
+                    let storage_key = match Uuid::crypto16()? {
+                        Uuid::Crypto16(b) => b,
+                        _ => return Err(Error::WrongUuidTypeForImageStorage)
+                    };
+                    let file_name = storage_key.to_base64_url();
+                    let path_str = format!("/var/data/temp/{file_name}.part");
+                    let path = PathBuf::from(path_str);
+
+                    // create temporary file
+                    let mut file_handle = File::create_new(&path).await?;
+
+                    // track individual file size
+                    let mut bytes:u64 = 0;
+
+                    // build hasher
+                    let mut hasher = Hasher::new();
+
+                    // stream chunks to file
                     while let Some(chunk) = field.try_next().await.map_err(Error::Multipart)? {
-                        bytes.extend_from_slice(&chunk);
+                        // stream to disk
+                        file_handle.write_all(&chunk).await?;
 
-                        if bytes.len() as u64 > MAX_BYTES_PER_FILE {
+                        // error on file size too large
+                        bytes += chunk.len() as u64;
+                        
+                        if bytes > MAX_BYTES_PER_FILE {
+                            fs::remove_file(&path).await?;
                             return Err(Error::UploadedFileTooLarge);
                         }
 
+                        // track total upload size + error on total size too large
                         total_bytes += chunk.len() as u64;
+
                         if total_bytes > MAX_TOTAL_BYTES {
+                            fs::remove_file(&path).await?;
                             return Err(Error::UploadTooLargeTotal);
                         }
+
+                        hasher.update(&chunk);
                     }
 
-                    if bytes.is_empty() {
+                    // finalize the write
+                    file_handle.flush().await?;
+                    drop(file_handle);
+
+                    // verify file has some data
+                    if bytes == 0 {
+                        fs::remove_file(&path).await?;
                         return Err(Error::UploadMissingFileData);
                     }
 
-                    files.push(UploadedFile {
-                        client_file_name,
-                        bytes,
-                    });
-                }
+                    // finalize the hash
+                    let hash = hasher.finalize();
 
+                    // build final path + upload data
+                    let ext = file_type.to_ext();
+                    let final_path = PathBuf::from(format!("/var/data/{file_name}.{ext}"));
+
+                    let upload_data = UploadedFile {
+                        bytes,
+                        client_file_name: client_file_name.clone(),
+                        file_type,
+                        hash, 
+                        path: final_path,
+                        session_id,
+                        storage_key
+                    };
+
+                    // remove temp file or move to finished directory
+                    let id = match Extraction::into_db(&upload_data, database).await {
+                        Ok(insert_id) => {
+                            fs::rename(&path, &upload_data.path).await?;
+                            insert_id
+                        },
+                        Err(e) => {
+                            fs::remove_file(&upload_data.path).await?;
+                            return Err(e);
+                        }
+                    };
+
+                    // upload data
+                    let ingested_doc = BatchIngestItem {
+                        client_file_name,
+                        id,
+                        deduped: false,
+                        bytes,
+                        mime_type: file_type.to_mime().to_owned(),
+                    };
+
+                    files.push(ingested_doc);
+                },
                 _ => {
-                        // drain and discard unexpected fields
+                        // drain + discard unexpected fields
                         // this will error silently and is bad design, but we can enforce once the SDK shape is set
                         while let Some(_chunk) = field.try_next().await.map_err(Error::Multipart)? {}
                     }
             }
         }
 
+        // early return on empty file set
         if files.is_empty() {
             return Err(Error::UploadMissingFileData);
         }
 
+        // try wake on the scanner
+        if let Err(e) = scanner.wake() {
+            println!("{e}");
+        }
+
+        // return upload data to caller
         Ok(files)
     }
-
 
     async fn new_session_logic(shared:&Data<AppState>) -> Result<NewScanSession> {
         let connection = shared.database();
@@ -107,9 +228,43 @@ impl ScanSessionPost {
         Ok(return_data)
     }
 
-    pub async fn private_sessions_response(_permissions: WereChecked, shared: Data<AppState>) -> HttpResponse {
-        match Self::new_session_logic(&shared).await {
-            Ok(d) => ApiResponse::default().with_code(201).with_message("resource created".to_string()).with_data(d).ok(),
+    async fn process_logic(session_id:i64, shared:&Data<AppState>) -> Result<()> {
+        // extract connection
+        let connection = shared.database();
+        
+        // validate session
+        if !ScanSession::exists(session_id, connection).await? {
+            return Err(Error::ScanSessionNotFound);
+        }
+
+        // update to queued
+        let new_status = ScanStatus::Queued;
+        ScanSession::update_status_by_id(session_id,new_status,connection).await?;
+
+        shared.scanner().wake()?;
+
+        Ok(())
+    }
+
+    pub async fn private_mulitpart_upload_response(_permissions: WereChecked, path: ActixPath<ReqPath>, mut payload:Multipart, shared: Data<AppState>) -> HttpResponse {
+        let database = shared.database();
+        let scanner = shared.scanner();
+        let session_id = path.into_inner().session_id;
+
+        let result = ScanSessionPost::batch_upload_logic(session_id, database, scanner, &mut payload).await;
+
+        match result {
+            Ok(d) => {
+                let response = BatchIngestResponse {
+                    session_id,
+                    uploaded: d,
+                };
+
+                match ApiResult::ok(201, "resource created").with_data(response) {
+                    Ok(s) => s.to_http(),
+                    Err(_e) => ApiResult::server_error().to_http()
+                }
+            },
             Err(e) => {
                 type E = Error;
 
@@ -117,23 +272,65 @@ impl ScanSessionPost {
 
                 if let Some(d) = error_opt {
                     match e {
-                        E::ScanSessionIdNotCreated  => ApiResponse::default().with_code(500).with_data(d).error(),
-                        _                           => ApiResponse::server_error().error()
-                    }
+                        E::UploadMissingFieldName               => ApiResult::bad_request().with_reason(d).to_http(),
+                        E::UploadMissingFileData                => ApiResult::bad_request().with_reason(d).to_http(),
+                        E::UploadMissingFileName                => ApiResult::bad_request().with_reason(d).to_http(),
+                        E::UploadTooLargeTotal                  => ApiResult::too_large().with_reason(d).to_http(),
+                        E::UploadedFileTooLarge                 => ApiResult::too_large().with_reason(d).to_http(),
+                        E::UploadMissingFileExt                 => ApiResult::bad_request().with_reason(d).to_http(),
+                        E::UploadTooManyParts{ max: _ }         => ApiResult::bad_request().with_reason(d).to_http(),
+                        E::ScanSessionNotFound                  => ApiResult::bad_request().with_reason(d).to_http(),
+                        _                                       => ApiResult::server_error().to_http()
+                    } 
                 } else {
-                    ApiResponse::server_error().error()
+                    ApiResult::server_error().to_http()
                 }
             }
         }
     }
 
-    pub async fn private_single_upload_response(_permissions: WereChecked, path: Path<ReqPath>, mut payload:Multipart, shared: Data<AppState>) -> HttpResponse {
-        let _database = shared.database();
-        let _session_id = &path.session_id;
+    pub async fn private_process_response(_permissions: WereChecked, path: ActixPath<ReqPath>, shared: Data<AppState>) -> HttpResponse {
+        let session_id = path.into_inner().session_id;
 
-        let _result = ScanSessionPost::batch_upload_logic(&mut payload).await;
+        match Self::process_logic(session_id,&shared).await {
+            Ok(_) => ApiResult::accepted().to_http(),
+            Err(e) => {
+                type E = Error;
 
-        ApiResponse::success()
+                let error_opt = e.to_api_error_message();
+
+                if let Some(d) = error_opt {
+                    match e {
+                        E::ScanSessionNotFound  => ApiResult::not_found().with_reason(d).to_http(),
+                        _                       => ApiResult::server_error().to_http()
+                    }
+                } else {
+                    ApiResult::<()>::server_error().to_http()
+                }
+            }
+        }
+    }
+
+    pub async fn private_sessions_response(_permissions: WereChecked, shared: Data<AppState>) -> HttpResponse {
+        match Self::new_session_logic(&shared).await {
+            Ok(d) => {
+                ApiResult::resource_created_with_data(d).to_http()
+            },
+            Err(e) => {
+                type E = Error;
+
+                let error_opt = e.to_api_error_message();
+
+                if let Some(d) = error_opt {
+                    match e {
+                        E::ScanSessionIdNotCreated  => ApiResult::server_error().with_reason(d).to_http(),
+                        _                           => ApiResult::server_error().to_http()
+                    }
+                } else {
+                    ApiResult::server_error().to_http()
+                }
+            }
+        }
     }
 
 }

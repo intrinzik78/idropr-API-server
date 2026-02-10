@@ -1,7 +1,10 @@
 use actix_web::{Responder,web::Data};
 use serde::Deserialize;
 
-use crate::{types::{ApiResponse,AppState}};
+use crate::{
+    enums::ApiResult,
+    types::AppState
+};
 
 #[allow(dead_code)]
 #[derive(Deserialize)]
@@ -14,7 +17,7 @@ pub struct SecretsPut;
 
 impl SecretsPut {
     pub async fn logic(_shared: Data<AppState>) -> impl Responder {
-        ApiResponse::success()
+        ApiResult::success().to_http()
     }
 }
 

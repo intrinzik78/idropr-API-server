@@ -3,8 +3,8 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
-    enums::Error,
-    types::{ApiErrorData,ApiResponse, AppState, permissions::WereChecked, secrets::DecryptedSecret}
+    enums::{ApiResult, Error},
+    types::{AppState, permissions::WereChecked, secrets::DecryptedSecret}
 };
 
 #[derive(Debug,Deserialize,ToSchema)]
@@ -26,18 +26,18 @@ impl SecretsPost {
         let secret = DecryptedSecret::new(&post.name, &post.description, &post.api_key, &post.api_secret);
 
         match controller.new_secret(secret, database).await {
-            Ok(()) => return ApiResponse::resource_created().ok(),
+            Ok(()) => return ApiResult::no_content().to_http(),
             Err(e) => {
                 let error_opt = e.to_api_error_message();
 
                 if let Some(d) = error_opt {
                     match e {
-                        E::LocationRecordNotFoundById       => ApiResponse::<ApiErrorData>::default().with_code(400).with_data(d).error(),
-                        E::DatabaseTransactionVerification  => ApiResponse::<ApiErrorData>::default().with_code(500).with_data(d).error(),
-                        _ => ApiResponse::server_error().error()
+                        E::LocationRecordNotFoundById       => ApiResult::not_found().with_reason(d).to_http(),
+                        E::DatabaseTransactionVerification  => ApiResult::server_error().with_reason(d).to_http(),
+                        _ => ApiResult::server_error().to_http()
                     }
                 } else {
-                    ApiResponse::server_error().error()
+                    ApiResult::server_error().to_http()
                 }
             }
         }

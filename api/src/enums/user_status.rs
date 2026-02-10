@@ -1,7 +1,7 @@
 use crate::enums::Error;
 
 #[derive(Clone,Copy,Debug,PartialEq)]
-#[repr(i8)]
+#[repr(u8)]
 pub enum UserAccountStatus {
     Disabled    = 0,  // 0
     Enabled     = 1,  // 1

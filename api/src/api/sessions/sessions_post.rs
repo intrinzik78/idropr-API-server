@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::{
-    enums::{AuthorizationStatus, Error, sessions::SessionControllerStatus, User, Uuid},
+    enums::{ApiResult,AuthorizationStatus, Error, sessions::SessionControllerStatus, User, Uuid},
     traits::VerifyPassword,
-    types::{ApiResponse, AppState, sessions::{DatabaseSession, KeySet, Session}}
+    types::{AppState, sessions::{DatabaseSession, KeySet, Session}}
 };
 
 type Result<T> = std::result::Result<T,Error>;
@@ -55,26 +55,26 @@ impl SessionsPost {
                     if let Some(user) = user_opt {
                         user
                     } else {
-                        return ApiResponse::unauthorized().error();
+                        return ApiResult::unauthorized().to_http();
                     }
                 },
                 Err(e) => {
                     // log here
                     println!("{e}");
-                    return ApiResponse::unauthorized().error();
+                    return ApiResult::unauthorized().to_http();
                 }
             }
         };
 
         // verify password against hash from database
         if user.verify_password(&post.password).await == AuthorizationStatus::Unauthorized {
-            return ApiResponse::unauthorized().error();
+            return ApiResult::unauthorized().to_http();
         }
 
         // create a key set
         let key_set = match  KeySet::new() {
             Ok(set) => set,
-            Err(_e) => return ApiResponse::unauthorized().error()
+            Err(_e) => return ApiResult::unauthorized().to_http()
         };
 
         // get session controller
@@ -82,7 +82,7 @@ impl SessionsPost {
             SessionControllerStatus::Enabled(s) => s,
             SessionControllerStatus::Disabled => {
                 // log here
-                return ApiResponse::unauthorized().error();
+                return ApiResult::unauthorized().to_http();
             }
         };
 
@@ -97,7 +97,7 @@ impl SessionsPost {
             Ok(t) => t,
             Err(_e) => {
                 // log here
-                return ApiResponse::unauthorized().error();
+                return ApiResult::unauthorized().to_http();
             }
         };
 
@@ -107,7 +107,7 @@ impl SessionsPost {
             Ok(hashed) => hashed,
             Err(_e) => {
                 // log here
-                return ApiResponse::unauthorized().error();
+                return ApiResult::unauthorized().to_http();
             } 
         };
 
@@ -116,7 +116,7 @@ impl SessionsPost {
             Ok(_insert_id) => (),
             Err(_e) => {
                 // log here
-                return ApiResponse::unauthorized().error();
+                return ApiResult::unauthorized().to_http();
             }
         };
 
@@ -125,9 +125,10 @@ impl SessionsPost {
             access_token: &token
         };
 
-        ApiResponse::default()
-            .with_data(response)
-            .ok()
+        match ApiResult::ok(200,"ok").with_data(response) {
+            Ok(s) => s.to_http(),
+            Err(_) => ApiResult::unauthorized().to_http()
+        }
 
     }
 }

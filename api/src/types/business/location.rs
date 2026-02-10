@@ -110,9 +110,7 @@ struct DatabaseHelper {
     state:String,
     zipcode:String,
     country:String,
-    priority_id:u8,
-    #[sqlx(default)]
-    meters:Option<f64>
+    priority_id:u8
 }
 
 impl DatabaseHelper {
@@ -175,13 +173,13 @@ impl DatabaseHelper {
 
     async fn pub_list_nearest_by_zipcode(zipcode:&str, connection: &DatabaseConnection) -> Result<Vec<Location>> {
         let sql = "WITH input AS (SELECT geom FROM main.zcta WHERE zipcode = ?)
-                        SELECT bl.id AS location_id, bl.business_account_id,bl.name,bl.priority_id,a.id AS address_id,a.address_1,a.address_2,a.city,a.state,a.zipcode,a.country, ST_Distance_Sphere(i.geom, z.geom) AS meters
+                        SELECT bl.id AS location_id, bl.business_account_id,bl.name,bl.priority_id,a.id AS address_id,a.address_1,a.address_2,a.city,a.state,a.zipcode,a.country
                         FROM input i
                         JOIN main.business_location bl ON bl.address_id IS NOT NULL
                         JOIN main.address a ON a.id = bl.address_id
                         JOIN main.zcta z ON z.zipcode = a.zipcode
 
-                        ORDER BY meters, bl.id
+                        ORDER BY ST_Distance_Sphere(i.geom, z.geom), bl.id
 
                         LIMIT 3";
 
@@ -204,14 +202,14 @@ impl DatabaseHelper {
 
     async fn pub_list_nearest_by_zipcode_filter_activity(zipcode:&str, activity:u8, connection: &DatabaseConnection) -> Result<Vec<Location>> {
         let sql = "WITH input AS (SELECT geom FROM main.zcta WHERE zipcode = ?)
-                        SELECT bl.id AS location_id, bl.business_account_id, bl.name, bl.priority_id, a.id AS address_id, a.address_1, a.address_2, a.city, a.state, a.zipcode, a.country, ST_Distance_Sphere(i.geom, z.geom) AS meters
-                        
+                        SELECT bl.id AS location_id, bl.business_account_id, bl.name, bl.priority_id, a.id AS address_id, a.address_1, a.address_2, a.city, a.state, a.zipcode, a.country
+
                         FROM input i
-                        
+
                         JOIN main.business_location AS bl ON bl.address_id IS NOT NULL
                         JOIN main.address AS a ON a.id = bl.address_id
                         JOIN main.zcta AS z ON z.zipcode = a.zipcode
-                        
+
                         WHERE EXISTS (
                             SELECT 1
                             FROM main.business_location_services AS bs
@@ -219,8 +217,8 @@ impl DatabaseHelper {
                             AND bs.location_service_id = ?
                         )
 
-                        ORDER BY meters, bl.id
-                        
+                        ORDER BY ST_Distance_Sphere(i.geom, z.geom), bl.id
+
                         LIMIT 3";
 
         let helper_list:Vec<DatabaseHelper> = sqlx::query_as(sql)

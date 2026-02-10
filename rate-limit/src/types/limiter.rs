@@ -238,6 +238,7 @@ impl RateLimiter {
     }
 
     /// hashes an ip address for shard routing
+    #[inline]
     fn hash(&self, ip_address: &IpAddr) -> usize {
         let mut hasher = DefaultHasher::new();
         let shard_count = self.shards.len();

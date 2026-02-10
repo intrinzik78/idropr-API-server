@@ -5,6 +5,7 @@ use rate_limit::{
     enums::{TimeWindow,RefillRate},
     types::RateLimitBuilder
 };
+use tokio::fs;
 
 use crate::{
     enums::{Error, RateLimiterStatus, SystemFlag, sessions::SessionControllerStatus},
@@ -61,6 +62,10 @@ impl PrimaryCommand {
 
         println!("\nwarning: server running in dev mode\n");
 
+        // create required directories
+        fs::create_dir_all(&env.extractor_final_dir).await?;
+        fs::create_dir_all(&env.extractor_temp_dir).await?;
+
         let connection = DatabaseConnection::new().await?;
 
         let limiter = PrimaryCommand::build_rate_limiter(env);
@@ -79,6 +84,10 @@ impl PrimaryCommand {
     pub async fn prod_state(env: &Env) -> Result<AppState> {
 
         println!("\nserver running in production mode\n");
+
+        // create required directories
+        fs::create_dir_all(&env.extractor_final_dir).await?;
+        fs::create_dir_all(&env.extractor_temp_dir).await?;
 
         let connection = DatabaseConnection::new().await?;
         

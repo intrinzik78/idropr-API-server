@@ -3,9 +3,9 @@ use database::types::DatabaseConnection;
 use serde::Deserialize;
 
 use crate::{
-    enums::{Error, ExpiredStatus, RowsUpdated, VerificationStatus},
+    enums::{ApiResult, Error, ExpiredStatus, RowsUpdated, VerificationStatus},
     traits::{ToHash,ToVerificationStatus},
-    types::{email::EmailVerification, ApiErrorData, ApiResponse, AppState}
+    types::{AppState, email::EmailVerification}
 };
 
 type Result<T> = std::result::Result<T,Error>;
@@ -69,20 +69,20 @@ impl PatchEmailVerification {
         let database = shared.database();
        
         match Self::logic(id, &uuid, database).await {
-            Ok(()) => ApiResponse::no_content(),
+            Ok(()) => ApiResult::no_content().to_http(),
             Err(e) => {
                 let error_opt = e.to_api_error_message();
 
                 if let Some(d) = error_opt {
                     match e {
-                        E::EmailAlreadyVerified         => ApiResponse::<ApiErrorData>::default().with_code(400).with_data(d).error(),
-                        E::EmailVerificationExpired     => ApiResponse::<ApiErrorData>::default().with_code(410).with_data(d).error(),
-                        E::VerificationEmailNotFound    => ApiResponse::<ApiErrorData>::default().with_code(410).with_data(d).error(),
-                        E::VerificationHashCheckFailed  => ApiResponse::<ApiErrorData>::default().with_code(401).with_data(d).error(),
-                        _                               => ApiResponse::server_error().error()
+                        E::EmailAlreadyVerified         => ApiResult::bad_request().with_reason(d).to_http(),
+                        E::EmailVerificationExpired     => ApiResult::gone().with_reason(d).to_http(),
+                        E::VerificationEmailNotFound    => ApiResult::gone().with_reason(d).to_http(),
+                        E::VerificationHashCheckFailed  => ApiResult::unauthorized().with_reason(d).to_http(),
+                        _                               => ApiResult::server_error().to_http()
                     }
                 } else {
-                    ApiResponse::server_error().error()
+                    ApiResult::server_error().to_http()
                 }
             }
         }

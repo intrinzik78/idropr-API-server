@@ -4,7 +4,7 @@ use futures::future::{ok, LocalBoxFuture, Ready};
 use rate_limit::enums::Decision;
 use std::task::{Context, Poll};
 
-use crate::{enums::RateLimiterStatus, types::{AppState,ApiResponse}};
+use crate::{enums::{ApiResult,RateLimiterStatus}, types::AppState};
 
 /// target for the middleware service
 #[derive(Debug,Default)]
@@ -87,7 +87,7 @@ where
             // map fail into BoxBody
             let res = req
                 .into_response(
-                    ApiResponse::rate_limited().error()
+                    ApiResult::rate_limited().to_http()
                 )
                 .map_into_right_body();
 

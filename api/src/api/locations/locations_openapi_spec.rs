@@ -3,8 +3,8 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use crate::{
     api::locations::LocationsGet,
-    enums::{ActivityType,ApiResult,Error},
-    types::{ApiErrorData, ApiResponse, AppState, permissions::WereChecked}
+    enums::{ActivityType,ApiResult,Error, ErrorReason},
+    types::{ApiError, AppState, permissions::WereChecked}
 };
 use super::locations_get::{PublicLocation, PrivateLocation, GetReqPath, GetReqParams};
 
@@ -18,6 +18,7 @@ use super::locations_get::{PublicLocation, PrivateLocation, GetReqPath, GetReqPa
     responses(
         (
             status = 200, description = "OK",
+            content_type = "application/json",
             body = ApiResultPrivateLocation,
             example = json!({ "Ok": { "code": 200, "message": "OK", "data": { "address_1": "123 Some Road..." } } })
         ),
@@ -49,8 +50,7 @@ use super::locations_get::{PublicLocation, PrivateLocation, GetReqPath, GetReqPa
             content_type = "application/json",
             body = ApiResultError,
             examples(
-                ("global_rate_limit" = (value = json!({ "Error": { "code": 429, "message":"rate limited"} }))),
-                ("verification_rate_limit" = (value = json!({ "Error": { "code": 429, "message":"rate limited", "data":{"code": 1003, "reason": "new verification requested too quickly"}} })))
+                ("global_rate_limit" = (value = json!({ "Error": { "code": 429, "message":"rate limited"} })))
             )
         ),
         (status = 500, description = "server error",
@@ -75,16 +75,9 @@ pub async fn get_private_location_by_id(_permissions: WereChecked,req: HttpReque
     security([]),
     responses(
         (status = 200, description = "OK",
+            content_type = "application/json",
             body = ApiResultPublicLocation,
             example = json!({"Ok":{"code":200,"message":"OK","data":{"address_1":"123 Some Road..."}}})
-        ),
-        (
-            status = 403, description = "forbidden",
-            content_type = "application/json",
-            body = ApiResultError,
-            examples(
-                ("insufficient_permissions" = (value = json!({ "Error": { "code": 403, "message": "forbidden", "data": { "code": 1009, "reason": "insufficient permissions for requested resource" } }})))
-            )
         ),
         (status = 404, description = "not found",
             content_type = "application/json",
@@ -142,6 +135,7 @@ pub async fn get_public_location_by_id(path: Path<GetReqPath>,shared: Data<AppSt
     responses(
         (
             status = 200, description = "OK",
+            content_type = "application/json",
             body = ApiResultPublicLocationsList,
             example = json!({"Ok":{"code":200,"message":"OK","data":[{"address_1":"123 Some Road..."}]}})
         ),
@@ -151,14 +145,6 @@ pub async fn get_public_location_by_id(path: Path<GetReqPath>,shared: Data<AppSt
             body = ApiResultError,
             examples(
               ("bad_request" = (value = json!({"Error":{"code":400,"message":"bad request","data":{"code":1010,"reason":"missing query parameter"}}})))
-            )
-        ),
-        (
-            status = 403, description = "forbidden",
-            content_type = "application/json",
-            body = ApiResultError,
-            examples(
-                ("insufficient_permissions" = (value = json!({ "Error": { "code": 403, "message": "forbidden", "data": { "code": 1009, "reason": "insufficient permissions for requested resource" } }})))
             )
         ),
         (status = 404, description = "not found",
@@ -191,7 +177,7 @@ pub async fn get_public_nearest_locations_by_zipcode(params:Query<GetReqParams>,
             .to_api_error_message()
             .expect("unreachable");
         
-        return ApiResponse::bad_request().with_code(e.code).with_message(e.reason).error();
+        return ApiResult::bad_request().with_reason(e).to_http();
     }
 
     // filter on params given
@@ -200,7 +186,7 @@ pub async fn get_public_nearest_locations_by_zipcode(params:Query<GetReqParams>,
     } else if params.lat.is_some() && params.lon.is_some() {
         todo!()
     } else {
-        ApiResponse::server_error().error()
+        ApiResult::server_error().to_http()
     }
 }
 
@@ -211,7 +197,19 @@ pub struct ApiResultPublicLocation(#[schema(inline)] pub ApiResult<PublicLocatio
 pub struct ApiResultPrivateLocation(#[schema(inline)] pub ApiResult<PrivateLocation>);
 
 #[derive(Serialize, ToSchema)]
-pub struct ApiResultPublicLocationsList(#[schema(inline)] pub ApiResult<Vec<PublicLocation>>);
+pub enum ApiResultPublicLocationsList {
+    Ok(ApiSuccess_PublicLocationsList),
+    Error(ApiError<ErrorReason>),
+}
 
 #[derive(Serialize, ToSchema)]
-pub struct ApiResultError(#[schema(inline)] pub ApiResult<ApiErrorData>);
+#[allow(nonstandard_style)]
+pub struct ApiSuccess_PublicLocationsList {
+    pub code: u16,
+    pub message: String,
+    pub data: Vec<PublicLocation>,
+}
+
+
+#[derive(Serialize, ToSchema)]
+pub enum ApiResultError { Error(ApiError<ErrorReason>) }

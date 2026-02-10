@@ -8,6 +8,8 @@ pub mod types;
 // import packages
 use clap::Parser;
 
+use crate::types::scans::ScanSweeper;
+
 // internal types
 use {
     enums::{Error,PrimaryCommand},
@@ -41,6 +43,7 @@ async fn main() -> Result<()> {
         let () = SessionSweeper::run(&arc_state).await;
         let () = RateLimitSweeper::run(&arc_state).await;
         let () = UserEpochSync::run(&arc_state).await;
+        let () = ScanSweeper::run(&arc_state).await;
     }
 
     // build and run server ↴
